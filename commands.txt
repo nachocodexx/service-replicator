@@ -1,0 +1,2 @@
+DELETE ALL SERVICES WITH TAG "test=testing"
+docker service rm $(docker service ls --filter "label=test=testing" --format {{.Name}})
