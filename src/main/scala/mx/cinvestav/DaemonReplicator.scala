@@ -40,26 +40,9 @@ object DaemonReplicator {
         currentState <- ctx.state.get.pureS
         apiVersion   = ctx.config.apiVersion
         _            <- ctx.logger.debug("GET_NODE_INFO_FROM_MONITORING").pureS
-//        events       = Events.orderAndFilterEventsMonotonic(events=currentState.events)
-//        nodes        = Events.onlyAddedService(events=events).map(_.asInstanceOf[AddedService])
-
-//        uris         = nodes.map{ node=>
-//          Uri.unsafeFromString(s"http://${node.hostname}:${node.port}/api/v$apiVersion/info")
-//        }
-//        requests     = uris.map{ uri=>
-//          Request[IO](
-//            method = Method.GET,
-//            uri    = uri
-//          )
-//        }
-//        responses   <- Stream.emits(requests).covary[IO].flatMap{request =>
-//          for {
-//            response <- ctx.client.stream(request)
-//            _        <- ctx.logger.debug(response.toString).pureS
-//          } yield ()
-//        }
-
-
+        infos        <- ctx.config.monitoring.getInfo()
+        _            <- ctx.logger.debug(infos.toString).pureS
+//        _            <- ctx
        } yield ()
     }
   }

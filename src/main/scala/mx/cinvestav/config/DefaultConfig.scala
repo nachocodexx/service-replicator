@@ -1,15 +1,19 @@
 package mx.cinvestav.config
 
+import fs2.Stream
+import mx.cinvestav.commons.types.Monitoring.PoolInfo
+//
 import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.config
 import mx.cinvestav.events.Events.AddedService
-import org.http4s.{Request, Uri,Method}
+import org.http4s.{Method, Request, Response, Uri}
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._
+import org.http4s.circe.CirceEntityDecoder._
 
 case object DockerMode extends Enumeration {
   type DockerMode = String
@@ -27,8 +31,14 @@ sealed trait INode {
 }
 
 case class Monitoring(hostname:String,port:Int) extends INode {
-  def addNode(addedService: AddedService)={
-
+  def getInfo()(implicit ctx:NodeContext) = {
+    val uri     = Uri.unsafeFromString(s"http://$hostname:$port/api/v${ctx.config.apiVersion}/pool/info")
+    val request = Request[IO](
+      method = Method.POST,
+      uri = uri
+    )
+    ctx.client.stream(req = request).evalMap(_.as[PoolInfo])
+//      .compile.lastOrError
   }
 }
 case class Pool(hostname:String,port:Int,inMemory:Boolean) extends INode{
