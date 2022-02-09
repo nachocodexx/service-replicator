@@ -5,7 +5,8 @@ import cats.effect.IO.{IOCont, Uncancelable}
 import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
-import mx.cinvestav.helpers.Helpers.CreateNodePayload
+import mx.cinvestav.commons.events
+//import mx.cinvestav.helpers.Helpers.CreateNodePayload
 import mx.cinvestav.controllers
 import mx.cinvestav.helpers.Helpers
 //GetEventsController
@@ -42,21 +43,45 @@ class HttpServer()(implicit ctx:NodeContext){
   def apiBaseRouteName = s"/api/v${ctx.config.apiVersion}"
 
   def httpApp: Kleisli[IO, Request[IO], Response[IO]] = Router[IO](
-    s"$apiBaseRouteName" -> HttpRoutes.of[IO]{
-      case req@GET -> Root /"events" => controllers.GetEventsController()
-      case req@GET -> Root / "stats" => controllers.StatsController()
+    s"$apiBaseRouteName/morin" -> HttpRoutes.of[IO] {
+      case req@POST -> Root / "create" => controllers.morin.Create(req)
+      case req@GET -> Root / "pendejo" => Ok("UN POCOOOOOOO")
     },
     s"$apiBaseRouteName/nodes" ->  HttpRoutes.of[IO]{
       case req@POST -> Root / "delete" / nodeId => controllers.nodes.Delete(nodeId)
       case req@POST -> Root / "start" / nodeId => controllers.nodes.Started(req,nodeId)
+//
+      case req@GET -> Root / nodeId => Ok()
+      case req@GET -> Root  => Ok()
+//
       case req@POST -> Root  => for {
-          payload     <- req.as[CreateCacheNode]
-          hostLogPath = req.headers.get(CIString("Host-Log-Path")).map(_.head.value).getOrElse(ctx.config.hostLogPath)
-          maxAR       = req.headers.get(CIString("Max-AR")).flatMap(_.head.value.toIntOption).getOrElse(ctx.config.maxAr)
-          res         <- controllers.nodes.Create(payload,hostLogPath = hostLogPath,maxAR = maxAR)
-        } yield res
-      case req@POST -> Root / "v2" =>controllers.nodes.Create.v2(req)
-    }
+        payload     <- req.as[CreateCacheNode]
+//
+        hostLogPath = req.headers.get(CIString("Host-Log-Path")).map(_.head.value).getOrElse(ctx.config.hostLogPath)
+        maxAR       = req.headers.get(CIString("Max-AR")).flatMap(_.head.value.toIntOption).getOrElse(ctx.config.maxAr)
+//
+        res         <- controllers.nodes.Create(payload,hostLogPath = hostLogPath,maxAR = maxAR)
+      } yield res
+//      case req@POST -> Root / "v2" =>controllers.nodes.Create.v2(req)
+    },
+  s"$apiBaseRouteName" -> HttpRoutes.of[IO]{
+      case req@GET -> Root /"events" => controllers.GetEventsController()
+      case req@GET -> Root / "stats" => controllers.StatsController()
+      case req@POST -> Root / "pool" => controllers.pool.Create(req)
+      case req@POST -> Root / "reset"=> for {
+        _   <- ctx.state.update{ s=>
+          s.copy(
+            events = s.events.filter{
+              case _:Events.RemovedService=> true
+              case _:Events.StartedService => true
+              case _: Events.AddedService => true
+              case _:Events.CreatedPool => true
+            }
+          )
+        }
+        res <- NoContent()
+      } yield res
+    },
   ).orNotFound
 
   def run(): IO[Unit] =

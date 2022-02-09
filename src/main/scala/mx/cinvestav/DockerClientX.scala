@@ -7,9 +7,6 @@ import com.github.dockerjava.api.command.{CreateServiceResponse, ListContainersC
 import com.github.dockerjava.api.model.{ContainerSpec, ExposedPort, HostConfig, Mount, MountType, NetworkAttachmentConfig, Ports, ServiceSpec, TaskSpec}
 import com.github.dockerjava.core.{DockerClientConfig, DockerClientImpl}
 import com.github.dockerjava.transport.DockerHttpClient
-
-import java.util
-//
 import retry._
 import retry.implicits._
 //impor
@@ -21,14 +18,16 @@ import collection.JavaConverters._
 class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
     private val client = DockerClientImpl.getInstance(config, httpClient)
 
+
+
   def getIpAddress(containerId:String,networkName:String) = IO.delay{
-    client.listContainersCmd()
-      .withIdFilter(
+    val x= client.listContainersCmd()
+      .withNameFilter(
         List(containerId).asJava
       ).exec()
       .asScala
       .toList
-      .map(_.getNetworkSettings.getNetworks.get(networkName).getIpAddress)
+      x.map(_.getNetworkSettings.getNetworks.get(networkName).getIpAddress)
       .headOption
   }
 
@@ -42,7 +41,13 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
         x.getPorts
       }.headOption.map(x=>x.toList)
   }
-  def getPortByName(containerName:String)= IO.delay{
+  def getPortListByNodeId(containerName:String) =
+    getPortByNodeId(containerName = containerName)
+    .map(_.map(_.map(_.getPublicPort).distinct))
+
+
+
+  def getPortByNodeId(containerName:String)= IO.delay{
     client.listContainersCmd()
       .withNameFilter(
         List(containerName).asJava
@@ -146,14 +151,18 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
                        image:Image,
                        hostname: Hostname,
                        envs:Envs,
-                       hostConfig: HostConfig
+                       hostConfig: HostConfig,
+                       labels:Map[String,String] = Map.empty[String,String]
                       ) = {
      IO.pure(
        client.createContainerCmd(image.build)
-       .withName(name.build)
-       .withHostName(hostname.build)
-       .withEnv(envs.build: _*)
-       .withHostConfig(hostConfig)
+         .withName(name.build)
+         .withHostName(hostname.build)
+         .withEnv(envs.build: _*)
+         .withHostConfig(hostConfig)
+         .withLabels(labels.asJava)
+
+//         .with
      )
    }
 

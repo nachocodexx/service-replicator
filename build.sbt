@@ -26,7 +26,6 @@ lazy val app =(project in file(".")).settings(
     case x if x.contains("org/apache/commons/logging/impl/SimpleLog$1.class")=> MergeStrategy.last
     case x if x.contains("org/apache/commons/logging/impl/SimpleLog.class")=> MergeStrategy.last
     case x =>
-      //      println(x)
       val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
       oldStrategy(x)
   }

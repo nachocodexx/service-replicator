@@ -2,8 +2,8 @@ package mx.cinvestav
 
 import cats.implicits._
 import cats.effect._
-import cats.effect.std.Semaphore
-import com.github.dockerjava.api.model.{ExposedPort, HostConfig, Ports}
+import cats.effect.std.{Queue, Semaphore}
+import fs2.Stream
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
 import mx.cinvestav.Declarations.{NodeContext, NodeState}
 import mx.cinvestav.config.DefaultConfig
@@ -37,20 +37,18 @@ object Main extends IOApp{
   implicit val unsafeLogger: SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
   def initContext(client:Client[IO]): IO[NodeContext] = for {
-    _ <- Logger[IO].debug(s"-> SYSTEM_REPLICATION_TRIGGER[${config.nodeId}]")
-    s <- Semaphore[IO](1)
-    _initState = NodeState(
+    _                  <- Logger[IO].debug(s"-> SERVICE_REPLICATOR[${config.nodeId}]")
+    s                  <- Semaphore[IO](1)
+    _initState         = NodeState(
       ip           = InetAddress.getLocalHost.getHostAddress,
       basePort     =  config.basePort,
       createdNodes = Nil,
       events = Nil,
       s = s
     )
-    _     <- Logger[IO].debug(_initState.toString)
-    state <- IO.ref(_initState)
-
-    dockerClientConfig = new DefaultDockerClientConfig
-      .Builder()
+    _                  <- Logger[IO].debug(_initState.toString)
+    state              <- IO.ref(_initState)
+    dockerClientConfig = new DefaultDockerClientConfig.Builder()
       .withDockerHost(config.dockerSock)
       .withDockerTlsVerify(false)
       .build();
@@ -67,9 +65,22 @@ object Main extends IOApp{
   } yield ctx
 
   override def run(args: List[String]): IO[ExitCode] = for {
-    (client,finalizer) <- BlazeClientBuilder[IO](global).resource.allocated
+    (client,finalizer)         <- BlazeClientBuilder[IO](global).resource.allocated
     implicit0(ctx:NodeContext) <- initContext(client)
-    _ <- if(ctx.config.daemonEnabled) DaemonReplicator(period = ctx.config.daemonDelayMs.milliseconds).compile.drain.onError(e=>ctx.logger.error(e.getMessage)).start else IO.unit
+    q                          <- Queue.dropping[IO,Int](1)
+    _                          <- Stream.fromQueueUnterminated(queue=q)
+      .evalMap { _ =>
+        val payload  = CreateCacheNode(cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
+        for {
+          _ <- ctx.logger.debug("CREATE_NEW_NODE")
+          _ <- controllers.nodes.Create(payload=payload,hostLogPath=ctx.config.hostLogPath,maxAR= ctx.config.maxAr)
+          _ <- IO.sleep(ctx.config.createNodeCoolDownMs milliseconds)
+          _ <- ctx.logger.debug("FINISHED_CREATED_NODE")
+        } yield ()
+      }
+      .compile.drain.start
+    _ <- if(ctx.config.daemonEnabled) DaemonReplicator(q=q,period = ctx.config.daemonDelayMs.milliseconds).compile.drain.onError(e=>ctx.logger.error(e.getMessage)).start else IO.unit
+//
     _ <- (0 until config.initNodes).toList.traverse{ _=>
       val payload  = CreateCacheNode(cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
       controllers.nodes.Create(payload=payload,hostLogPath = config.hostLogPath, maxAR = config.maxAr)

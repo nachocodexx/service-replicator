@@ -6,6 +6,7 @@ import io.circe.generic.auto._
 import mx.cinvestav.Declarations.Implicits._
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.events.Events
+import mx.cinvestav.events.Events.AddedService
 //
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._
@@ -15,12 +16,19 @@ object StatsController {
 
   def apply()(implicit ctx:NodeContext) = {
     for{
-      _                <- ctx.logger.debug("HERE!")
       currentState     <- ctx.state.get
       rawEvents        = currentState.events
       events           = Events.orderAndFilterEventsMonotonic(events=rawEvents)
       nodes            = Events.onlyAddedService(events=events)
 
+      nodesJson = nodes.map(_.asInstanceOf[AddedService]).map{ node=>
+        Json.obj(
+          "nodeId" -> node.nodeId.asJson,
+          "port" -> node.port.asJson,
+          "policy" -> node.cachePolicy.asJson,
+          "cacheSize" -> node.cacheSize.asJson
+        )
+      }
       stats = Json.obj(
         "nodes" -> nodes.length.asJson
       )

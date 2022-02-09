@@ -8,6 +8,25 @@ import mx.cinvestav.commons.events.{EventX,Get,Put}
 import java.util.UUID
 
 object Events {
+
+  case class CreatedPool(
+                          nodeId:String,
+                          poolId:String,
+                          drId:String,
+                          monitoring:String,
+                          srId:String,
+                          port:Int,
+                          rf:Int,
+                          ar:Int,
+                          timestamp:Long,
+                          serviceTimeNanos:Long,
+                          serialNumber:Long=0,
+                          eventType:String ="CREATED_POOL",
+                          eventId:String= UUID.randomUUID().toString,
+                          monotonicTimestamp:Long = 0L,
+                          correlationId:String = ""
+                        ) extends EventX
+
   case class StartedService(
                            nodeId:String,
                            serviceId:String,
