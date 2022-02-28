@@ -38,6 +38,26 @@ object Events {
                            monotonicTimestamp:Long = 0L,
                            correlationId:String = ""
                          ) extends EventX
+
+
+
+  import mx.cinvestav.commons.docker
+  case class AddedContainer(
+                             nodeId:String,
+                             ipAddress:String,
+                             hostname:String,
+                             serviceTimeNanos:Long,
+                             image:docker.Image,
+                             ports:List[docker.Ports],
+                             timestamp:Long=0L,
+                             envs:Map[String,String] = Map.empty[String,String],
+                             serialNumber:Long=0L,
+                             eventType:String ="ADDED_CONTAINER",
+                             eventId:String= UUID.randomUUID().toString,
+                             monotonicTimestamp:Long = 0L,
+                             correlationId:String = "",
+                             labels:Map[String,String] = Map.empty[String,String]
+                         ) extends EventX
   case class AddedService(
                            serialNumber:Long,
                            nodeId:String,
@@ -53,7 +73,9 @@ object Events {
                            eventType:String ="ADDED_SERVICE",
                            eventId:String= UUID.randomUUID().toString,
                            monotonicTimestamp:Long = 0L,
-                           correlationId:String = ""
+                           correlationId:String = "",
+                           metadata:Map[String,String] = Map.empty[String,String],
+                           swarmNodeId:String = ""
                          ) extends EventX
   case class RemovedService(
                            serialNumber:Long,
@@ -72,6 +94,11 @@ object Events {
     case _:AddedService => true
     case _ => false
   }
+
+  def onlyAddedContainers(events:List[EventX]): List[EventX] = events.filter{
+    case _:AddedContainer => true
+    case _ => false
+  }
   def onlyStartedService(events:List[EventX]): List[EventX] = events.filter{
     case _:StartedService => true
     case _ => false
@@ -81,13 +108,23 @@ object Events {
       case (event,index)=>
         for {
           now      <- IO.monotonic.map(_.toNanos)
+          realNow  <- IO.realTime.map(_.toNanos)
           newEvent = event match {
             case x:AddedService => x.copy(
               monotonicTimestamp = now,
-              serialNumber = lastSerialNumber+index+1)
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
+            case x:AddedContainer => x.copy(
+              monotonicTimestamp = now,
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
             case x:RemovedService => x.copy(
               monotonicTimestamp = now,
-              serialNumber = lastSerialNumber+index+1)
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
             case _ => event
           }
         } yield newEvent

@@ -96,6 +96,14 @@ case class DefaultConfig(
                         daemonEnabled:Boolean,
                         dataReplicator: DataReplicator,
                         threshold:Double,
-                        createNodeCoolDownMs:Int
-//                        rabbitmq: RabbitMQClusterConfig
+                        createNodeCoolDownMs:Int,
+                        maxConnections:Int,
+                        bufferSize:Int,
+                        responseHeaderTimeoutMs:Long,
+                        replicationStrategy:String,
+                        swarmNodes:List[String],
+                        memoryBytes:Long,
+                        nanoCPUS:Long,
+                        loadBalancer:String
+                        //                        rabbitmq: RabbitMQClusterConfig
                         )

@@ -4,10 +4,12 @@ import mx.cinvestav.Declarations.Docker._
 import cats.effect._
 import cats.implicits._
 import com.github.dockerjava.api.command.{CreateServiceResponse, ListContainersCmd}
-import com.github.dockerjava.api.model.{ContainerSpec, ExposedPort, HostConfig, Mount, MountType, NetworkAttachmentConfig, Ports, ServiceSpec, TaskSpec}
+import com.github.dockerjava.api.model.{ContainerSpec, EndpointResolutionMode, EndpointSpec, ExposedPort, HostConfig, Mount, MountType, NetworkAttachmentConfig, PortConfig, Ports, ResourceRequirements, ResourceSpecs, ServicePlacement, ServiceSpec, TaskSpec}
 import com.github.dockerjava.core.{DockerClientConfig, DockerClientImpl}
 import com.github.dockerjava.transport.DockerHttpClient
+import mx.cinvestav.Declarations.NodeContext
 import retry._
+import mx.cinvestav.commons.docker
 import retry.implicits._
 //impor
 import collection.JavaConverters._
@@ -20,7 +22,7 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
 
 
 
-  def getIpAddress(containerId:String,networkName:String) = IO.delay{
+  def getIpAddressByContainerId(containerId:String, networkName:String): IO[Option[String]] = IO.delay{
     val x= client.listContainersCmd()
       .withNameFilter(
         List(containerId).asJava
@@ -29,6 +31,23 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
       .toList
       x.map(_.getNetworkSettings.getNetworks.get(networkName).getIpAddress)
       .headOption
+  }
+  def getIpAddressByServiceId(serviceId:String)(implicit ctx:NodeContext): IO[Option[String]] = {
+    val services = getServiceById(serviceId=serviceId)
+    for {
+      ss  <- services
+      _   <- ctx.logger.debug(s"SERVICES $ss")
+      s     = ss.headOption
+      endpoint = s.map(_.getEndpoint)
+      _  <- ctx.logger.debug(s"ENDPOINT $endpoint")
+      virtualIps = endpoint.map(_.getVirtualIPs.toList)
+      _ <- ctx.logger.debug(s"VIPS $virtualIps")
+      headVip = virtualIps.flatMap(_.headOption)
+      ip = headVip.map(_.getAddr)
+    } yield ip
+//    services.map{ ss=>
+
+//    }
   }
 
 
@@ -63,21 +82,21 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
       client.listServicesCmd()
         .withIdFilter(
           (serviceId::Nil).asJava
-        )
+        ).exec().asScala.toList
     }
   }
 
-  def getServiceIdByNodeI(serviceId:String) = for {
-//    service       <- getServiceById(serviceId).map(_.exec().asScala.toList)
-    _<- IO.unit
-//    services        = client.listServicesCmd()
-//    x             = service.head
-//    spec          = x.getSpec
-//    taskTemplate  = spec.getTaskTemplate
-//    containerSpec = taskTemplate.getContainerSpec
-//    y             = taskTemplate.getNetworks
-//    z             = y
-  } yield()
+  def getPortByServiceId(serviceId:String) ={
+    val services = getServiceById(serviceId)
+    for {
+      ss <- services
+      x  = ss.headOption.map(_.getEndpoint.getPorts.toList)
+    } yield x
+//    services.map{
+//      ss=>
+//    }
+  }
+
 
   def getContainerById(containerId:String): IO[ListContainersCmd] = IO.delay{
       client.listContainersCmd()
@@ -104,53 +123,65 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
   }
 
   def createService(
-                     name:Name,
-                     image: Image,
+                     name:docker.Name,
+                     image:docker.Image,
                      labels:Map[String,String],
-                     envs: Envs,
-                     networkName:String="my-net",
-                     hostLogPath:String="/home/jcastillo/logs",
-                     dockerLogPath:String="/app/logs",
+                     envs: docker.Envs,
+                     maxReplicas:Int =1,
+                     constraints:List[String] =List.empty[String],
+                     mounts:List[Mount] = List.empty[Mount],
+                     networkAttachmentConfigs: List[NetworkAttachmentConfig] = List.empty[NetworkAttachmentConfig],
+                     memoryBytes:Long = 1073741824,
+                     nanoCPUS:Long =1000000000
                    ): IO[CreateServiceResponse] = {
-//    val networks    = List((new NetworkAttachmentConfig()).with).asJava
-    val logMount       = (new Mount())
-      .withType(MountType.BIND)
-      .withSource(hostLogPath)
-      .withTarget(dockerLogPath)
 
-    val containerSpec = (new ContainerSpec())
+    val containerSpec = new ContainerSpec()
       .withEnv(envs.build.toList.asJava)
       .withHostname(name.build)
       .withImage(image.build)
       .withLabels(labels.asJava)
-      .withMounts(List(logMount).asJava)
+      .withMounts(mounts.asJava)
 
+    val servicePlacement = new ServicePlacement()
+      .withConstraints(constraints.asJava)
+      .withMaxReplicas(maxReplicas)
+//
+    val resourcesSpecs = new ResourceSpecs()
+      .withMemoryBytes(memoryBytes)
+      .withNanoCPUs(nanoCPUS)
 
-    val myNetAttach = (new NetworkAttachmentConfig())
-      .withTarget(networkName)
-
-    val taskSpec = (new TaskSpec())
+    val resources = new ResourceRequirements()
+      .withLimits(resourcesSpecs)
+    val taskSpec = new TaskSpec()
       .withContainerSpec(containerSpec)
-      .withNetworks(List(myNetAttach).asJava)
+      .withNetworks(networkAttachmentConfigs.asJava)
+      .withPlacement(servicePlacement)
+      .withResources(resources)
 
+    val ports = List(
+      new PortConfig()
+        .withTargetPort(6666)
+    ) .asJava
+    val endpointSpec = new EndpointSpec()
+      .withMode(EndpointResolutionMode.VIP)
+      .withPorts(ports)
 
-
-
-    val serviceSpec = (new ServiceSpec())
+    val serviceSpec = new ServiceSpec()
       .withName(name.build)
       .withLabels(labels.asJava)
       .withTaskTemplate(taskSpec)
-      .withNetworks(List(myNetAttach).asJava)
+      .withNetworks(networkAttachmentConfigs.asJava)
+      .withEndpointSpec(endpointSpec)
 
     IO.delay{
       client.createServiceCmd(serviceSpec).exec()
     }
   }
 
-   def createContainer(name:Name,
-                       image:Image,
-                       hostname: Hostname,
-                       envs:Envs,
+   def createContainer(name:docker.Name,
+                       image:docker.Image,
+                       hostname: docker.Hostname,
+                       envs:docker.Envs,
                        hostConfig: HostConfig,
                        labels:Map[String,String] = Map.empty[String,String]
                       ) = {

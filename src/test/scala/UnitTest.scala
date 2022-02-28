@@ -41,7 +41,7 @@ class UnitTest extends munit .CatsEffectSuite {
         httpClient = dockerHttpClient
       )
       containerId = "cache-a9f5S2Nec1Ms"
-      x           <- dockerClientX.getIpAddress(containerId,"my-net")
+      x           <- dockerClientX.getIpAddressByContainerId(containerId,"my-net")
       y           <- dockerClientX.getPortListByNodeId(containerId)
 //    ____________________________________________________________
       _ <- IO.println(s"IP_ADDRESS: $x")

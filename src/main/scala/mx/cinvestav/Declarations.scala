@@ -5,8 +5,9 @@ import cats.Order
 import cats.effect._
 import cats.effect.std.Semaphore
 //
+import mx.cinvestav.commons.docker._
+//
 import com.github.dockerjava.api.model.HostConfig
-import io.circe.Decoder.Result
 import io.circe.{Decoder, Encoder, HCursor}
 import mx.cinvestav.commons.events.{AddedNode, Del, Downloaded, EventX, Evicted, Get, Missed, Push, Put, RemovedNode, Replicated, Uploaded}
 import mx.cinvestav.commons.types.{NodeId, NodeX}
@@ -20,6 +21,8 @@ import io.circe.syntax._
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
 
 object Declarations {
+
+  case class CreatedNode(serviceId:String,selectedSwarmNodeId:Option[String])
 
   object Payloads {
     case class DockerImage(name:String,tag:String)
@@ -36,7 +39,7 @@ object Declarations {
                                 policy:String,
                                 networkName:String,
                                 environments:Map[String,String]= Map.empty[String,String],
-                                image:Docker.Image = Docker.Image("nachocode/cache-node","v2".some)
+                                image:Image = Image("nachocode/cache-node","v2".some)
                               )
     case class CreateCacheNodeResponse(
                                         nodeId:String,
@@ -57,13 +60,11 @@ object Declarations {
 
 
   object Implicits {
-    implicit val dockerImageDecoder:Decoder[Docker.Image] = new Decoder[Docker.Image] {
-      override def apply(c: HCursor): Result[Docker.Image] = for {
-        tag        <- c.get[String]("tag")
-        repository <- c.get[String]("repository")
-        image      = Docker.Image(repository, Option.when(tag.nonEmpty)(tag))
-      } yield image
-    }
+    implicit val dockerImageDecoder:Decoder[Image] = (c: HCursor) => for {
+      tag <- c.get[String]("tag")
+      repository <- c.get[String]("repository")
+      image = Image(repository, Option.when(tag.nonEmpty)(tag))
+    } yield image
     implicit val nodeXOrder: Order[NodeX] = new Order[NodeX] {
       override def compare(x: NodeX, y: NodeX): Int = Order.compare[Int](x.nodeId.hashCode,y.nodeId.hashCode)
     }
@@ -110,7 +111,8 @@ object Declarations {
                         createdNodes:List[String],
                         events:List[EventX],
                         s:Semaphore[IO],
-                        pendingNodeCreation:List[String]=Nil
+                        pendingNodeCreation:List[String]=Nil,
+                        replicationStrategy:String
                       )
   case class NodeContext(
                           config:DefaultConfig,
@@ -135,18 +137,39 @@ object Declarations {
 //                              )
 //
 
+//  class SharedCacheEnvironments() {
+//  }
+  case class NodeDataEnvs(hostname:String,port:Int)
+  object CacheNodeEnvironments {
+    def apply(
+               nodeId:String,
+               poolId:String,
+               port:Int,
+               host:String,
+               cloudEnabled:Boolean,
+               firstLevelPool:NodeDataEnvs,
+               secondLevelPool:NodeDataEnvs,
+             ):Map[String,String] = Map(
+      "NODE_ID" -> nodeId,
+      "POOL_ID"  -> poolId,
+      "NODE_HOST" -> host,
+      "NODE_PORT" -> port.toString,
+      "CLOUD_ENABLED" -> cloudEnabled.toString
+    )
+  }
   case class CreateCacheNodeCfg(
-                                 nodeId:String ,
+                                 nodeId:String,
                                  poolId:String,
-                                 cachePolicy:String ,
+                                 cachePolicy:String,
                                  cacheSize:Int,
                                  environments:Map[String,String] = Map.empty[String,String],
-                                 memory:Long =1000000000,
+                                 memoryBytes:Long = 1073741824*4,
+                                 nanoCPUS:Long    = 1000000000*2,
                                  networkName:String="my-net",
                                  hostLogPath:String = "/test/logs",
                                  hostStoragePath:String = "/test/sink",
-                                 dockerImage:Docker.Image = Docker.Image("nachocode/cache-node","v2".some),
-                                 volumes:Map[String,String] = Map.empty[String,String]
+                                 dockerImage:Image = Image("nachocode/cache-node","v2".some),
+                                 volumes:Map[String,String] = Map.empty[String,String],
                                )
     object CreateCacheNodeCfg {
       def fromCreateCacheNode(nodeId: NodeId,payload:CreateCacheNode)(implicit ctx:NodeContext) = CreateCacheNodeCfg(
@@ -160,38 +183,38 @@ object Declarations {
     }
   object Docker {
 
-    case class Ports(host:Int,docker:Int)
+//    case class Ports(host:Int,docker:Int)
     case class CreateContainerData(name:Name,image:Image,hostname: Hostname,envs:Envs,hostConfig: HostConfig)
-    case class Envs(values:Map[String,String]){
-      def build:Array[String] = {
-        values.toArray.map{
-          case (key, value) => s"$key=$value"
-        }
-      }
-    }
-    case class Hostname(value:String){
-      def build:String = value
-    }
-    case class Name(value:String){
-      def build:String = value
-    }
-    case class Image(repository:String,tag:Option[String]= Some("latest")){
-      def build:String = tag match {
-        case Some(tag) => s"$repository:$tag"
-        case None => s"$repository:latest"
-      }
-    }
-    object Image {
-      def fromString(x:String) = {
-        val xx   = x.split(':')
-        val name = xx(0)
-        if(xx.length == 1) Image(name,None)
-        else{
-          val tag  = xx.lastOption
-          Image(name,tag)
-        }
-      }
-    }
+//    case class Envs(values:Map[String,String]){
+//      def build:Array[String] = {
+//        values.toArray.map{
+//          case (key, value) => s"$key=$value"
+//        }
+//      }
+//    }
+//    case class Hostname(value:String){
+//      def build:String = value
+//    }
+//    case class Name(value:String){
+//      def build:String = value
+//    }
+//    case class Image(repository:String,tag:Option[String]= Some("latest")){
+//      def build:String = tag match {
+//        case Some(tag) => s"$repository:$tag"
+//        case None => s"$repository:latest"
+//      }
+//    }
+//    object Image {
+//      def fromString(x:String) = {
+//        val xx   = x.split(':')
+//        val name = xx(0)
+//        if(xx.length == 1) Image(name,None)
+//        else{
+//          val tag  = xx.lastOption
+//          Image(name,tag)
+//        }
+//      }
+//    }
   }
 
 }
