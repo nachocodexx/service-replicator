@@ -52,6 +52,7 @@ object Helpers {
       cacheSize        = cfg.cacheSize
       cachePolicy      = cfg.cachePolicy
       memory           = cfg.memoryBytes
+      diskBytes        = cfg.diskBytes
 //
       currentState     <- ctx.state.get
       ports2           = new Ports()
@@ -66,36 +67,7 @@ object Helpers {
 //
       storagePath      = "/app/data"
       //
-      envs          = docker.Envs(
-        Map(
-          "NODE_ID" -> nodeId,
-          "POOL_ID" -> ctx.config.pool.hostname,
-          "NODE_HOST" -> "0.0.0.0",
-          "NODE_PORT" ->  ctx.config.basePort.toString,
-          //
-          "CLOUD_ENABLED" -> ctx.config.cloudEnabled.toString,
-          //
-          "CACHE_POOL_HOSTNAME" -> ctx.config.cachePool.hostname,
-          "CACHE_POOL_PORT"-> ctx.config.cachePool.port.toString,
-          //
-          "POOL_HOSTNAME" -> ctx.config.pool.hostname,
-          "POOL_PORT" -> ctx.config.pool.port.toString,
-          //
-          "SERVICE_REPLICATOR_HOSTNAME" -> ctx.config.nodeId,
-          "SERVICE_REPLICATOR_PORT" -> ctx.config.port.toString,
-          //
-          "CACHE_POLICY"-> cachePolicy,
-          "CACHE_SIZE" -> cacheSize.toString,
-          "TOTAL_STORAGE_CAPACITY" -> ctx.config.baseTotalStorageCapacity.toString,
-          "IN_MEMORY" -> ctx.config.pool.inMemory.toString,
-          "STORAGE_PATH" -> storagePath,
-          //
-          "MONITORING_DELAY_MS" -> "1000",
-          "API_VERSION" ->ctx.config.apiVersion.toString,
-          "BUFFER_SIZE" -> "65536",
-          "LOG_PATH" ->  dockerLogPath
-        )  ++ environments
-      )
+      envs          = docker.Envs( Map()  ++ environments )
       storageVol     = new Volume(storagePath)
       logVol         = new Volume(dockerLogPath)
 //      Logging binding
@@ -155,38 +127,7 @@ object Helpers {
       dockerLogPath     = "/app/logs"
       dockerStoragePath = "/app/data"
       //
-      envs              = docker.Envs(
-        Map(
-
-          "NODE_ID" -> nodeId,
-          "POOL_ID" -> ctx.config.pool.hostname,
-          "NODE_HOST" -> host,
-          "NODE_PORT" ->  ctx.config.basePort.toString,
-          //
-          "CLOUD_ENABLED" -> ctx.config.cloudEnabled.toString,
-          //
-          "CACHE_POOL_HOSTNAME" -> ctx.config.cachePool.hostname,
-          "CACHE_POOL_PORT"-> ctx.config.cachePool.port.toString,
-          //
-          "POOL_HOSTNAME" -> ctx.config.pool.hostname,
-          "POOL_PORT" -> ctx.config.pool.port.toString,
-          //
-          "SERVICE_REPLICATOR_HOSTNAME" -> ctx.config.nodeId,
-          "SERVICE_REPLICATOR_PORT" -> ctx.config.port.toString,
-          //
-          "CACHE_POLICY"-> cachePolicy,
-          "CACHE_SIZE" -> cacheSize.toString,
-          "TOTAL_STORAGE_CAPACITY" -> ctx.config.baseTotalStorageCapacity.toString,
-          "IN_MEMORY" -> ctx.config.pool.inMemory.toString,
-          "STORAGE_PATH" -> dockerStoragePath,
-          //
-          "MONITORING_DELAY_MS" -> "1000",
-          "API_VERSION" ->ctx.config.apiVersion.toString,
-          "BUFFER_SIZE" -> ctx.config.bufferSize.toString,
-          "LOG_PATH" ->  dockerLogPath
-        )  ++ environments
-      )
-
+      envs              = docker.Envs(Map()  ++ environments)
       logMount      = new Mount()
         .withType(MountType.BIND)
         .withSource(hostLogPath)

@@ -163,8 +163,10 @@ object Declarations {
                                  cachePolicy:String,
                                  cacheSize:Int,
                                  environments:Map[String,String] = Map.empty[String,String],
+                                 diskBytes:Long =1000000000L,
                                  memoryBytes:Long = 1073741824*4,
                                  nanoCPUS:Long    = 1000000000*2,
+
                                  networkName:String="my-net",
                                  hostLogPath:String = "/test/logs",
                                  hostStoragePath:String = "/test/sink",
