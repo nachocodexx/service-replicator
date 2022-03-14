@@ -3,7 +3,8 @@ package mx.cinvestav.events
 import cats.implicits._
 import cats.effect.IO
 import mx.cinvestav.Declarations.NodeContext
-import mx.cinvestav.commons.events.{EventX,Get,Put}
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.{EventX, Get, Put}
 
 import java.util.UUID
 
@@ -38,7 +39,7 @@ object Events {
                            monotonicTimestamp:Long = 0L,
                            correlationId:String = ""
                          ) extends EventX
-  case class AddedService(
+/*  case class AddedService(
                            serialNumber:Long,
                            nodeId:String,
                            serviceId:String,
@@ -46,6 +47,7 @@ object Events {
                            hostname:String,
                            port:Int,
                            totalStorageCapacity:Long,
+                           totalMemoryCapacity:Long,
                            cacheSize:Int,
                            cachePolicy:String,
                            timestamp:Long,
@@ -54,7 +56,7 @@ object Events {
                            eventId:String= UUID.randomUUID().toString,
                            monotonicTimestamp:Long = 0L,
                            correlationId:String = ""
-                         ) extends EventX
+                         ) extends EventX*/
   case class RemovedService(
                            serialNumber:Long,
                            nodeId:String,

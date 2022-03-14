@@ -4,8 +4,9 @@ import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.Implicits._
 import mx.cinvestav.Declarations.NodeContext
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.{AddedService, StartedService}
+import mx.cinvestav.events.Events.StartedService
 import mx.cinvestav.helpers.Helpers
 //import org.http4s.Status.{NoContent, NotFound}
 //

@@ -7,6 +7,7 @@ import com.github.dockerjava.api.model._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import mx.cinvestav.Declarations.{CreateCacheNodeCfg, Docker}
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.config.DockerMode
 //
 
@@ -14,7 +15,6 @@ import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.Declarations.Payloads._
 import mx.cinvestav.commons.types.NodeId
 import mx.cinvestav.config.INode
-import mx.cinvestav.events.Events.AddedService
 import org.http4s.{EntityEncoder, Headers, Method, Request, Uri}
 import retry._
 import retry.implicits._

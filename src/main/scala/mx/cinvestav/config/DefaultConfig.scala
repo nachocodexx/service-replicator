@@ -1,6 +1,7 @@
 package mx.cinvestav.config
 
 import fs2.Stream
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.commons.types.Monitoring.PoolInfo
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
@@ -9,7 +10,6 @@ import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.config
-import mx.cinvestav.events.Events.AddedService
 import org.http4s.{Method, Request, Response, Uri}
 import io.circe._
 import io.circe.generic.auto._

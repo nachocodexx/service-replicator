@@ -4,6 +4,7 @@ import cats.implicits._
 import cats.Order
 import cats.effect._
 import cats.effect.std.Semaphore
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 //
 import com.github.dockerjava.api.model.HostConfig
 import io.circe.Decoder.Result
@@ -11,7 +12,6 @@ import io.circe.{Decoder, Encoder, HCursor}
 import mx.cinvestav.commons.events.{AddedNode, Del, Downloaded, EventX, Evicted, Get, Missed, Push, Put, RemovedNode, Replicated, Uploaded}
 import mx.cinvestav.commons.types.{NodeId, NodeX}
 import mx.cinvestav.config.DefaultConfig
-import mx.cinvestav.events.Events.AddedService
 import org.http4s.client.Client
 import org.typelevel.log4cats.Logger
 import io.circe._

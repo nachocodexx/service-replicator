@@ -2,8 +2,9 @@ package mx.cinvestav.controllers.nodes
 
 import cats.effect.IO
 import mx.cinvestav.Declarations.NodeContext
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.{AddedService, RemovedService}
+import mx.cinvestav.events.Events.RemovedService
 import org.http4s.dsl.io._
 
 object Delete {

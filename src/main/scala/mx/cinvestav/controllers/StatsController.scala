@@ -5,8 +5,8 @@ import io.circe.syntax._
 import io.circe.generic.auto._
 import mx.cinvestav.Declarations.Implicits._
 import mx.cinvestav.Declarations.NodeContext
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.AddedService
 //
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._

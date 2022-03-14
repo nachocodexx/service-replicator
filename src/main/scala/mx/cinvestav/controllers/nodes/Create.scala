@@ -2,6 +2,7 @@ package mx.cinvestav.controllers.nodes
 
 import cats.implicits._
 import cats.effect._
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 //
 import mx.cinvestav.Declarations.CreateCacheNodeCfg
 import mx.cinvestav.config.DockerMode
@@ -12,7 +13,6 @@ import mx.cinvestav.Declarations.Payloads.{CreateCacheNode, CreateCacheNodeRespo
 import mx.cinvestav.commons.types.NodeId
 import mx.cinvestav.commons.Implicits._
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.AddedService
 //
 import org.http4s.dsl.io._
 import org.http4s.circe.CirceEntityEncoder._
@@ -87,7 +87,8 @@ object Create {
                     serviceId = serviceId,
                     ipAddress = ipAddress,
                     port = publicPort,
-                    totalStorageCapacity = 40000000000L,
+                    totalStorageCapacity = ctx.config.baseTotalStorageCapacity,
+                    totalMemoryCapacity =cfg.memory,
                     cacheSize = payload.cacheSize,
                     cachePolicy = payload.policy,
                     timestamp = now,
@@ -96,7 +97,7 @@ object Create {
                     correlationId = serviceId,
                     hostname = nodeId.value
                   )
-                  _ <- Events.saveEvents(
+                  _                <- Events.saveEvents(
                     events = List(addedNodeEvent)
                   )
 

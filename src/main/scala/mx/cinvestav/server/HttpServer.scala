@@ -6,12 +6,13 @@ import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
 import mx.cinvestav.commons.events
+import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 //import mx.cinvestav.helpers.Helpers.CreateNodePayload
 import mx.cinvestav.controllers
 import mx.cinvestav.helpers.Helpers
 //GetEventsController
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.{AddedService, RemovedService}
+import mx.cinvestav.events.Events.RemovedService
 import org.http4s.Http
 //
 //
@@ -34,8 +35,6 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 //
 import concurrent.ExecutionContext.global
-//import mx.cinvestav.Declarations.Implicits._
-//import mx.cinvestav.Declarations.Payloads._
 
 
 class HttpServer()(implicit ctx:NodeContext){
@@ -74,7 +73,7 @@ class HttpServer()(implicit ctx:NodeContext){
             events = s.events.filter{
               case _:Events.RemovedService=> true
               case _:Events.StartedService => true
-              case _: Events.AddedService => true
+              case _: AddedService => true
               case _:Events.CreatedPool => true
             }
           )
