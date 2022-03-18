@@ -96,6 +96,7 @@ case class DefaultConfig(
                         daemonEnabled:Boolean,
                         dataReplicator: DataReplicator,
                         threshold:Double,
-                        createNodeCoolDownMs:Int
+                        createNodeCoolDownMs:Int,
+                        nodeIdPrefix:String
 //                        rabbitmq: RabbitMQClusterConfig
                         )

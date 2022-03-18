@@ -42,7 +42,8 @@ object Create {
       response          <- if(nodes.length < maxAR) {
         for {
           _               <- IO.unit
-          nodeId          = if(ctx.config.autoNodeId) NodeId.auto("cache-") else NodeId(s"cache-$currentNodeIndex")
+          prefix          = ctx.config.nodeIdPrefix
+          nodeId          = if(ctx.config.autoNodeId) NodeId.auto(prefix = prefix) else NodeId(s"${prefix}$currentNodeIndex")
 
           _               <- ctx.logger.debug(s"AFTER_CREATE_NODE $nodeId")
           dockerMode      = DockerMode.fromString(ctx.config.dockerMode)
