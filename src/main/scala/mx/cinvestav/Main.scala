@@ -44,7 +44,8 @@ object Main extends IOApp{
       basePort     =  config.basePort,
       createdNodes = Nil,
       events = Nil,
-      s = s
+      s = s,
+      replicationStrategy = config.replicationStrategy
     )
     _                  <- Logger[IO].debug(_initState.toString)
     state              <- IO.ref(_initState)
@@ -82,7 +83,8 @@ object Main extends IOApp{
     _ <- if(ctx.config.daemonEnabled) DaemonReplicator(q=q,period = ctx.config.daemonDelayMs.milliseconds).compile.drain.onError(e=>ctx.logger.error(e.getMessage)).start else IO.unit
 //
     _ <- (0 until config.initNodes).toList.traverse{ _=>
-      val payload  = CreateCacheNode(cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
+      val payload  = CreateCacheNode(
+        cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
       controllers.nodes.Create(payload=payload,hostLogPath = config.hostLogPath, maxAR = config.maxAr)
     }
     _ <- new HttpServer().run()

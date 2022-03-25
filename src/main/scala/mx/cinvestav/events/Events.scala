@@ -39,24 +39,6 @@ object Events {
                            monotonicTimestamp:Long = 0L,
                            correlationId:String = ""
                          ) extends EventX
-/*  case class AddedService(
-                           serialNumber:Long,
-                           nodeId:String,
-                           serviceId:String,
-                           ipAddress:String,
-                           hostname:String,
-                           port:Int,
-                           totalStorageCapacity:Long,
-                           totalMemoryCapacity:Long,
-                           cacheSize:Int,
-                           cachePolicy:String,
-                           timestamp:Long,
-                           serviceTimeNanos:Long,
-                           eventType:String ="ADDED_SERVICE",
-                           eventId:String= UUID.randomUUID().toString,
-                           monotonicTimestamp:Long = 0L,
-                           correlationId:String = ""
-                         ) extends EventX*/
   case class RemovedService(
                            serialNumber:Long,
                            nodeId:String,
@@ -74,6 +56,11 @@ object Events {
     case _:AddedService => true
     case _ => false
   }
+
+//  def onlyAddedContainers(events:List[EventX]): List[EventX] = events.filter{
+//    case _:AddedContainer => true
+//    case _ => false
+//  }
   def onlyStartedService(events:List[EventX]): List[EventX] = events.filter{
     case _:StartedService => true
     case _ => false
@@ -83,13 +70,23 @@ object Events {
       case (event,index)=>
         for {
           now      <- IO.monotonic.map(_.toNanos)
+          realNow  <- IO.realTime.map(_.toNanos)
           newEvent = event match {
             case x:AddedService => x.copy(
               monotonicTimestamp = now,
-              serialNumber = lastSerialNumber+index+1)
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
+//            case x:AddedContainer => x.copy(
+//              monotonicTimestamp = now,
+//              serialNumber = lastSerialNumber+index+1,
+//              timestamp = realNow
+//            )
             case x:RemovedService => x.copy(
               monotonicTimestamp = now,
-              serialNumber = lastSerialNumber+index+1)
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
             case _ => event
           }
         } yield newEvent

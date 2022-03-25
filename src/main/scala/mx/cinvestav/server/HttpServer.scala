@@ -7,10 +7,9 @@ import cats.effect._
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
 import mx.cinvestav.commons.events
 import mx.cinvestav.commons.events.ServiceReplicator.AddedService
-//import mx.cinvestav.helpers.Helpers.CreateNodePayload
+import mx.cinvestav.controllers.morin.GetContainer
 import mx.cinvestav.controllers
 import mx.cinvestav.helpers.Helpers
-//GetEventsController
 import mx.cinvestav.events.Events
 import mx.cinvestav.events.Events.RemovedService
 import org.http4s.Http
@@ -35,6 +34,8 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 //
 import concurrent.ExecutionContext.global
+import scala.concurrent.duration._
+import language.postfixOps
 
 
 class HttpServer()(implicit ctx:NodeContext){
@@ -50,7 +51,7 @@ class HttpServer()(implicit ctx:NodeContext){
       case req@POST -> Root / "delete" / nodeId => controllers.nodes.Delete(nodeId)
       case req@POST -> Root / "start" / nodeId => controllers.nodes.Started(req,nodeId)
 //
-      case req@GET -> Root / nodeId => Ok()
+      case req@GET -> Root / nodeId => GetContainer(nodeId)
       case req@GET -> Root  => Ok()
 //
       case req@POST -> Root  => for {
@@ -87,6 +88,9 @@ class HttpServer()(implicit ctx:NodeContext){
     BlazeServerBuilder[IO](global)
       .bindHttp(ctx.config.port,ctx.config.host)
       .withHttpApp(httpApp = httpApp)
+      .withMaxConnections(ctx.config.maxConnections)
+      .withBufferSize(ctx.config.bufferSize)
+      .withResponseHeaderTimeout(ctx.config.responseHeaderTimeoutMs milliseconds)
       .serve
       .compile
       .drain

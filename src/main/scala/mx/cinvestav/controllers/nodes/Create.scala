@@ -1,5 +1,4 @@
 package mx.cinvestav.controllers.nodes
-
 import cats.implicits._
 import cats.effect._
 import mx.cinvestav.commons.events.ServiceReplicator.AddedService
@@ -36,6 +35,10 @@ object Create {
       rawEvents         = currentState.events
       events            = Events.orderAndFilterEventsMonotonic(events=rawEvents)
       nodes             = Events.onlyAddedService(events=events)
+      defaultCounter    = ctx.config.swarmNodes.map(_ -> 0).toMap
+      counter           = nodes.asInstanceOf[List[AddedService]].groupBy(_.swarmNodeId).map{
+        case (snid,xs) => snid -> xs.length
+      } |+| defaultCounter
       currentNodeIndex  = nodes.length
       _                 <- ctx.logger.debug(s"NODE_LENGTH $currentNodeIndex")
 //          Check if the number of nodes does not reach the max number of nodes.
@@ -48,18 +51,53 @@ object Create {
           _               <- ctx.logger.debug(s"AFTER_CREATE_NODE $nodeId")
           dockerMode      = DockerMode.fromString(ctx.config.dockerMode)
 //        ________________________________________________________________
-          cfg             = CreateCacheNodeCfg(
+          dockerLogPath        = "/app/logs"
+          dockerStoragePath    = "/app/data"
+          totalMemoryCapacity  = payload.environments.getOrElse("TOTAL_MEMORY_CAPACITY",ctx.config.memoryBytes.toString)
+          totalStorageCapacity = payload.environments.getOrElse("TOTAL_STORAGE_CAPACITY",ctx.config.baseTotalStorageCapacity.toString)
+          defaultEnvs       =  Map(
+            "NODE_ID" -> nodeId.value,
+            "POOL_ID" -> ctx.config.pool.hostname,
+            "NODE_HOST" -> "0.0.0.0",
+            "NODE_PORT" ->  ctx.config.basePort.toString,
+            //
+            "CLOUD_ENABLED" -> ctx.config.cloudEnabled.toString,
+            //
+            "CACHE_POOL_HOSTNAME" -> ctx.config.cachePool.hostname,
+            "CACHE_POOL_PORT"-> ctx.config.cachePool.port.toString,
+            //
+            "POOL_HOSTNAME" -> ctx.config.pool.hostname,
+            "POOL_PORT" -> ctx.config.pool.port.toString,
+            //
+            "SERVICE_REPLICATOR_HOSTNAME" -> ctx.config.nodeId,
+            "SERVICE_REPLICATOR_PORT" -> ctx.config.port.toString,
+            //
+            "CACHE_POLICY"-> payload.policy,
+            "CACHE_SIZE" -> payload.cacheSize.toString,
+            "TOTAL_STORAGE_CAPACITY" -> ctx.config.baseTotalStorageCapacity.toString,
+            "IN_MEMORY" -> ctx.config.pool.inMemory.toString,
+            "STORAGE_PATH" -> dockerStoragePath,
+            //
+            "MONITORING_DELAY_MS" -> "1000",
+            "API_VERSION" ->ctx.config.apiVersion.toString,
+            "BUFFER_SIZE" -> ctx.config.bufferSize.toString,
+            "LOG_PATH" ->  dockerLogPath
+          )
+          cfg               = CreateCacheNodeCfg(
                           nodeId       = nodeId.value,
                           poolId       = ctx.config.poolId,
                           cachePolicy  = payload.policy,
                           cacheSize    = payload.cacheSize,
                           networkName  = payload.networkName,
-                          environments = payload.environments,
+                          environments = payload.environments ++ defaultEnvs,
                           hostLogPath  = ctx.config.hostLogPath,
-                          dockerImage  = payload.image
+                          dockerImage  = payload.image,
+                          memoryBytes  = totalMemoryCapacity.toLong,
+                          diskBytes    = totalStorageCapacity.toLong,
+                          nanoCPUS     = ctx.config.nanoCPUS,
           )
 // _________________________________________________________________________
-          serviceId       <- if(dockerMode  == DockerMode.SWARM) Helpers.createCacheNodeSwarm(cfg) else Helpers.createCacheNodeLocal(cfg)
+          createdNode       <- if(dockerMode  == DockerMode.SWARM) Helpers.createCacheNodeSwarm(cfg,counter) else Helpers.createCacheNodeLocal(cfg)
           maybeIpAddress  = nodeId.value.some
           _               <- ctx.logger.debug("IP_ADDRESSES/HOSTNAME "+maybeIpAddress )
           serviceTime     <- IO.realTime.map(_.toMillis).map(_ - arrivalTime)
@@ -70,38 +108,35 @@ object Create {
               _               <- ctx.logger.debug(s"PUBLIC_PORT $maybePublicPort")
               response        <- maybePublicPort match {
                 case Some(publicPort) => for {
-                  _              <- ctx.logger.debug(s"CONTAINER ON $ipAddress:$publicPort")
-                  responsePayload = CreateCacheNodeResponseV2(
+                  _                <- ctx.logger.debug(s"CONTAINER ON $ipAddress:$publicPort")
+                  responsePayload  = CreateCacheNodeResponseV2(
                     nodeId       = nodeId.value,
                     url          = s"http://$ipAddress:6666",
                     milliSeconds = serviceTime,
                     ip           = ipAddress,
                     port         = publicPort,
                     dockerPort   = 6666,
-                    containerId  =  serviceId
+                    containerId  =  createdNode.serviceId
                   )
                   now              <- IO.realTime.map(_.toMillis)
                   serviceTimeNanos <- IO.monotonic.map(_.toNanos).map(_ - arrivalTimeNanos)
                   addedNodeEvent   = AddedService(
-                    serialNumber =0,
-                    nodeId = nodeId.value,
-                    serviceId = serviceId,
-                    ipAddress = ipAddress,
-                    port = publicPort,
-                    totalStorageCapacity = ctx.config.baseTotalStorageCapacity,
-                    totalMemoryCapacity =cfg.memory,
-                    cacheSize = payload.cacheSize,
-                    cachePolicy = payload.policy,
-                    timestamp = now,
-                    serviceTimeNanos =serviceTimeNanos,
-                    monotonicTimestamp = 0,
-                    correlationId = serviceId,
-                    hostname = nodeId.value
+                    serialNumber         = 0,
+                    nodeId               = nodeId.value,
+                    serviceId            = createdNode.serviceId,
+                    ipAddress            = ipAddress,
+                    port                 = publicPort,
+                    totalStorageCapacity = totalStorageCapacity.toLong,
+                    totalMemoryCapacity  = totalMemoryCapacity.toLong,
+                    cacheSize            = payload.cacheSize,
+                    cachePolicy          = payload.policy,
+                    timestamp            = now,
+                    serviceTimeNanos     = serviceTimeNanos,
+                    correlationId        = createdNode.serviceId,
+                    hostname             = nodeId.value,
+                    swarmNodeId          = createdNode.selectedSwarmNodeId.getOrElse("")
                   )
-                  _                <- Events.saveEvents(
-                    events = List(addedNodeEvent)
-                  )
-
+                  _                <- Events.saveEvents(events = List(addedNodeEvent))
                   response        <- Ok(responsePayload.asJson)
                 } yield response
                 case None => for {
