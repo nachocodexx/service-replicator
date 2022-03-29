@@ -105,5 +105,6 @@ case class DefaultConfig(
                         swarmNodes:List[String],
                         memoryBytes:Long,
                         nanoCPUS:Long,
-                        loadBalancer:String
+                        loadBalancer:String,
+                        dockerMemoryBytes:Long
                         )

@@ -3,6 +3,7 @@ package mx.cinvestav.events
 import cats.implicits._
 import cats.effect.IO
 import mx.cinvestav.Declarations.NodeContext
+import mx.cinvestav.commons.docker
 import mx.cinvestav.commons.events.ServiceReplicator.AddedService
 import mx.cinvestav.commons.events.{EventX, Get, Put}
 
@@ -10,6 +11,22 @@ import java.util.UUID
 
 object Events {
 
+  case class AddedContainer(
+                             nodeId:String,
+                             ipAddress:String,
+                             hostname:String,
+                             ports: List[docker.Ports],
+                             serviceTimeNanos:Long,
+                             labels:Map[String,String],
+                             image:docker.Image,
+                             envs:Map[String,String],
+                             correlationId:String = "",
+                             monotonicTimestamp:Long = 0L,
+                             eventId:String = UUID.randomUUID().toString,
+                             eventType:String  = "ADDED_CONTAINER",
+                             serialNumber:Long=0L,
+                             timestamp:Long =0L,
+                           ) extends EventX
   case class CreatedPool(
                           nodeId:String,
                           poolId:String,
@@ -57,10 +74,10 @@ object Events {
     case _ => false
   }
 
-//  def onlyAddedContainers(events:List[EventX]): List[EventX] = events.filter{
-//    case _:AddedContainer => true
-//    case _ => false
-//  }
+  def onlyAddedContainers(events:List[EventX]): List[EventX] = events.filter{
+    case _:AddedContainer => true
+    case _ => false
+  }
   def onlyStartedService(events:List[EventX]): List[EventX] = events.filter{
     case _:StartedService => true
     case _ => false
@@ -77,11 +94,11 @@ object Events {
               serialNumber = lastSerialNumber+index+1,
               timestamp = realNow
             )
-//            case x:AddedContainer => x.copy(
-//              monotonicTimestamp = now,
-//              serialNumber = lastSerialNumber+index+1,
-//              timestamp = realNow
-//            )
+            case x:AddedContainer => x.copy(
+              monotonicTimestamp = now,
+              serialNumber = lastSerialNumber+index+1,
+              timestamp = realNow
+            )
             case x:RemovedService => x.copy(
               monotonicTimestamp = now,
               serialNumber = lastSerialNumber+index+1,

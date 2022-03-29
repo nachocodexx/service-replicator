@@ -75,13 +75,14 @@ object Create {
             "CACHE_POLICY"-> payload.policy,
             "CACHE_SIZE" -> payload.cacheSize.toString,
             "TOTAL_STORAGE_CAPACITY" -> ctx.config.baseTotalStorageCapacity.toString,
+            "TOTAL_MEMORY_CAPACITY" -> totalMemoryCapacity,
             "IN_MEMORY" -> ctx.config.pool.inMemory.toString,
             "STORAGE_PATH" -> dockerStoragePath,
             //
             "MONITORING_DELAY_MS" -> "1000",
             "API_VERSION" ->ctx.config.apiVersion.toString,
             "BUFFER_SIZE" -> ctx.config.bufferSize.toString,
-            "LOG_PATH" ->  dockerLogPath
+            "LOG_PATH" ->  dockerLogPath,
           )
           cfg               = CreateCacheNodeCfg(
                           nodeId       = nodeId.value,

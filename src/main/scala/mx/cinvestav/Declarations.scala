@@ -4,7 +4,11 @@ import cats.implicits._
 import cats.Order
 import cats.effect._
 import cats.effect.std.Semaphore
+import fs2.concurrent.SignallingRef
+import mx.cinvestav.commons.docker
 import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+
+import java.util.UUID
 //
 import mx.cinvestav.commons.docker._
 //
@@ -21,6 +25,7 @@ import io.circe.syntax._
 import mx.cinvestav.Declarations.Payloads.CreateCacheNode
 
 object Declarations {
+
 
   case class CreatedNode(serviceId:String,selectedSwarmNodeId:Option[String])
 
@@ -112,7 +117,7 @@ object Declarations {
                         events:List[EventX],
                         s:Semaphore[IO],
                         pendingNodeCreation:List[String]=Nil,
-                        replicationStrategy:String
+                        replicationStrategy:String,
                       )
   case class NodeContext(
                           config:DefaultConfig,

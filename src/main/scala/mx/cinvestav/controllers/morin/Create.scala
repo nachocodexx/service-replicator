@@ -3,7 +3,7 @@ import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.events.Events
-import mx.cinvestav.events.Events.{AddedContainer, AddedService}
+import mx.cinvestav.events.Events.AddedContainer
 //
 import org.http4s._
 import org.http4s.dsl.io._
@@ -69,7 +69,7 @@ object Create {
       serviceTimeNanos   = serviceTime,
       labels             = labels,
       image              = docker.Image.fromString(image),
-      envs               = envs
+      envs               = envs,
     )
     _              <- Events.saveEvents(events = addedService::Nil)
     res            <- Ok(jsonRes)
