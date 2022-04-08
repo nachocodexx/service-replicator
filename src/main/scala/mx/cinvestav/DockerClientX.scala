@@ -162,6 +162,7 @@ class DockerClientX(config: DockerClientConfig,httpClient: DockerHttpClient) {
       new PortConfig()
         .withTargetPort(6666)
     ) .asJava
+//    ___________________________________________________________________________
     val endpointSpec = new EndpointSpec()
       .withMode(EndpointResolutionMode.VIP)
       .withPorts(ports)

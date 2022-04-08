@@ -9,7 +9,7 @@ import mx.cinvestav.helpers.Helpers
 ///
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.Declarations.Payloads.{CreateCacheNode, CreateCacheNodeResponseV2}
-import mx.cinvestav.commons.types.NodeId
+import mx.cinvestav.commons.types.{NodeId,SystemReplicationResponse}
 import mx.cinvestav.commons.Implicits._
 import mx.cinvestav.events.Events
 //
@@ -110,7 +110,7 @@ object Create {
               response        <- maybePublicPort match {
                 case Some(publicPort) => for {
                   _                <- ctx.logger.debug(s"CONTAINER ON $ipAddress:$publicPort")
-                  responsePayload  = CreateCacheNodeResponseV2(
+                  responsePayload  = SystemReplicationResponse(
                     nodeId       = nodeId.value,
                     url          = s"http://$ipAddress:6666",
                     milliSeconds = serviceTime,

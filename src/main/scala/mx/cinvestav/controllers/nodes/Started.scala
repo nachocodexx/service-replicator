@@ -56,7 +56,7 @@ object Started {
                   correlationId = addedService.correlationId
                 )
                 _              <- Events.saveEvents(events = startedService :: Nil)
-                systems        = List(ctx.config.pool,ctx.config.monitoring,ctx.config.dataReplicator)
+                systems        = List(ctx.config.pool)
                 //            _              <- ctx.logger.debug(s"HERE_1")
                 xs             <- systems.traverse{ n=>
                   Helpers.addNode(n)(addedService)

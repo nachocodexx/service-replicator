@@ -110,6 +110,7 @@ object Declarations {
 //      case sd:GetInProgress => sd.asJson
     }
   }
+
   case class NodeState(
                         ip:String,
                         basePort:Int=10000,
@@ -118,6 +119,7 @@ object Declarations {
                         s:Semaphore[IO],
                         pendingNodeCreation:List[String]=Nil,
                         replicationStrategy:String,
+                        portMapping:Map[String,Ports] = Map.empty[String,Ports]
                       )
   case class NodeContext(
                           config:DefaultConfig,

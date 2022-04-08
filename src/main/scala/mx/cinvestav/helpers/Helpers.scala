@@ -4,6 +4,7 @@ import cats.data.NonEmptyList
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref, Resource}
 import cats.implicits._
+import com.github.dockerjava.api.model.Ports.Binding
 import com.github.dockerjava.api.model._
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -13,15 +14,17 @@ import mx.cinvestav.Declarations.{CreateCacheNodeCfg, CreatedNode, Docker}
 import mx.cinvestav.commons.docker
 import mx.cinvestav.config.DockerMode
 import org.http4s.Status
+
 import scala.util.Random
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.Declarations.Payloads._
 import mx.cinvestav.commons.types.NodeId
 import mx.cinvestav.config.INode
 import org.http4s.{EntityEncoder, Headers, Method, Request, Uri}
-import org.http4s.{EntityEncoder, Headers, Method, Request, Uri,Response}
+import org.http4s.{EntityEncoder, Headers, Method, Request, Response, Uri}
 import retry._
 import retry.implicits._
+
 import java.net.DatagramSocket
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -39,7 +42,7 @@ object Helpers {
   }
   def createCacheNodeLocal(cfg: CreateCacheNodeCfg)(implicit ctx:NodeContext): IO[CreatedNode] = {
     val program = for {
-      _                <- IO.unit
+      currentState     <- ctx.state.get
       nodeId           = cfg.nodeId
       networkName      = cfg.networkName
       environments     = cfg.environments
@@ -48,38 +51,49 @@ object Helpers {
       image            = cfg.dockerImage
       cacheSize        = cfg.cacheSize
       cachePolicy      = cfg.cachePolicy
-      memory           = cfg.memoryBytes
+      memory           = ctx.config.dockerMemoryBytes
+      //        memoryBytes
       diskBytes        = cfg.diskBytes
-//
       currentState     <- ctx.state.get
-      ports2           = new Ports()
-      exposedPort2     = ExposedPort.tcp(ctx.config.basePort)
-      emptyPortBinding = Ports.Binding.empty()
-        _              <- IO.delay{ ports2.bind(exposedPort2, emptyPortBinding )}
+      ar               = currentState.portMapping.size
+
+//    PORTS
+      ports            = new Ports()
+//      p2 = Ports.fromPrimitive()
+//      m0 = (("hola"-> 2) :: Nil).toMap
+//      DOCKER CONTAINER PORT 6666
+      containerPort    = ExposedPort.tcp(ctx.config.basePort)
+//    HOST_PORT:DOCKER_PORT
+      hostPort = ar+ctx.config.baseHostPort+1
+      emptyPortBinding = Ports.Binding.bindPort(hostPort)
+      _            <- IO.pure{
+        ports.bind(containerPort,emptyPortBinding)
+      }
       containerName    = docker.Name(nodeId)
-//      image            = Docker.Image(dockerImage.,Some(dockerImage.tag))
+      //      image            = Docker.Image(dockerImage.,Some(dockerImage.tag))
       hostname         = docker.Hostname(nodeId)
-//
+      //
       dockerLogPath    = "/app/logs"
-//
+      //
       storagePath      = "/app/data"
       //
       envs          = docker.Envs( Map()  ++ environments )
       storageVol     = new Volume(storagePath)
       logVol         = new Volume(dockerLogPath)
-//      Logging binding
+      //      Logging binding
       logVolBind     = new Bind(hostLogPath,logVol)
-//      Storage binging
+      //      Storage binging
       storageVolBind = new Bind(s"$hostStoragePath/$nodeId",storageVol)
-//
+      //
       binds          = new Binds(logVolBind,storageVolBind)
+//    ________________________________________________________________________
       hostConfig     = new HostConfig()
-        .withPortBindings(ports2)
+        .withPortBindings(ports)
         .withNetworkMode(networkName)
         .withBinds(binds)
         .withMemory(memory)
         .withCpuPercent(20)
-
+//    ________________________________________________________________________
       containerId <- ctx.dockerClientX.createContainer(
         name=containerName,
         image=image,
@@ -91,15 +105,18 @@ object Helpers {
           "nacho" -> ""
         )
       )
-        .map(_.withExposedPorts(exposedPort2).exec()).map(_.getId)
+        .map(_.withExposedPorts(containerPort).exec())
+//        .map(_.withHostConfig(hostConfig).exec())
+        .map(_.getId)
         .onError{e=>ctx.logger.debug(e.getMessage)}
 
       _ <- ctx.dockerClientX.startContainer(containerId).map(_.exec())
         .onError{e =>
           ctx.logger.error(s"START_CONTAINER_ERROR ${e.getMessage}") *> ctx.dockerClientX.deleteContainer(containerId).map(_.exec()).void
         }
-//      _ <- ctx.state.update(s=>s.copy(createdNodes =s.createdNodes:+containerId))
+      //      _ <- ctx.state.update(s=>s.copy(createdNodes =s.createdNodes:+containerId))
       createdNode = CreatedNode(serviceId = containerId,selectedSwarmNodeId = None)
+      _ <- ctx.state.update(s=>s.copy(portMapping =  s.portMapping + (nodeId -> docker.Ports(host = hostPort, docker = ctx.config.basePort) )))
     } yield createdNode
     program.onError(e=>ctx.logger.error(e.getMessage))
 
