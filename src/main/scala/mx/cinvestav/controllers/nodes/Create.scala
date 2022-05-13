@@ -83,6 +83,7 @@ object Create {
             "API_VERSION" ->ctx.config.apiVersion.toString,
             "BUFFER_SIZE" -> ctx.config.bufferSize.toString,
             "LOG_PATH" ->  dockerLogPath,
+            "DELAY_REPLICA_MS" -> ctx.config.delayReplicaMs.toString
           )
           cfg               = CreateCacheNodeCfg(
                           nodeId       = nodeId.value,

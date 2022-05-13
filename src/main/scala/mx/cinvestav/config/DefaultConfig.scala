@@ -107,5 +107,6 @@ case class DefaultConfig(
                         nanoCPUS:Long,
                         loadBalancer:String,
                         dockerMemoryBytes:Long,
-                        baseHostPort:Int
+                        baseHostPort:Int,
+                        delayReplicaMs:Long
                         )
