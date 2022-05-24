@@ -9,7 +9,7 @@ import com.github.dockerjava.api.model._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import mx.cinvestav.Declarations.{CreateCacheNodeCfg, Docker}
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import mx.cinvestav.Declarations.{CreateCacheNodeCfg, CreatedNode, Docker}
 import mx.cinvestav.commons.docker
 import mx.cinvestav.config.DockerMode
@@ -18,7 +18,7 @@ import org.http4s.Status
 import scala.util.Random
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.Declarations.Payloads._
-import mx.cinvestav.commons.types.NodeId
+import mx.cinvestav.commons.types.{NodeId, NodeReplicationSchema}
 import mx.cinvestav.config.INode
 import org.http4s.{EntityEncoder, Headers, Method, Request, Uri}
 import org.http4s.{EntityEncoder, Headers, Method, Request, Response, Uri}
@@ -36,10 +36,10 @@ object Helpers {
 
 
 
-  def createCacheNode(cfg: CreateCacheNodeCfg)(implicit ctx:NodeContext) = {
-    val dockerMode      = DockerMode.fromString(ctx.config.dockerMode)
-    if(dockerMode == DockerMode.SWARM) createCacheNodeSwarm(cfg) else createCacheNodeLocal(cfg)
-  }
+//  def createCacheNode(cfg: CreateCacheNodeCfg)(implicit ctx:NodeContext) = {
+//    val dockerMode      = DockerMode.fromString(ctx.config.dockerMode)
+//    if(dockerMode == DockerMode.SWARM) createCacheNodeSwarm(cfg) else createCacheNodeLocal(cfg)
+//  }
   def createCacheNodeLocal(cfg: CreateCacheNodeCfg)(implicit ctx:NodeContext): IO[CreatedNode] = {
     val program = for {
       currentState     <- ctx.state.get
@@ -49,8 +49,8 @@ object Helpers {
       hostLogPath      = cfg.hostLogPath
       hostStoragePath  = cfg.hostStoragePath
       image            = cfg.dockerImage
-      cacheSize        = cfg.cacheSize
-      cachePolicy      = cfg.cachePolicy
+//      cacheSize        = cfg.cacheSize
+//      cachePolicy      = cfg.cachePolicy
       memory           = ctx.config.dockerMemoryBytes
       //        memoryBytes
       diskBytes        = cfg.diskBytes
@@ -122,14 +122,10 @@ object Helpers {
 
   }
 
-  def createCacheNodeSwarm(cfg: CreateCacheNodeCfg,counter:Map[String,Int]=Map.empty[String,Int])(implicit ctx:NodeContext): IO[CreatedNode] = {
+  def createCacheNodeSwarm(nrs:NodeReplicationSchema,cfg: CreateCacheNodeCfg,counter:Map[String,Int]=Map.empty[String,Int])(implicit ctx:NodeContext): IO[CreatedNode] = {
     val program = for {
       currentState      <- ctx.state.get
       nodeId            = cfg.nodeId
-      poolId            = ""
-      cachePolicy       = ctx.config.baseCachePolicy
-      host              = "0.0.0.0"
-      cacheSize         = ctx.config.baseCacheSize
       networkName       = cfg.networkName
       environments      = cfg.environments
       hostLogPath       = cfg.hostLogPath
@@ -155,26 +151,28 @@ object Helpers {
          .withTarget(networkName)
 
 //
-      selectedNode <- ctx.config.loadBalancer match {
-        case "ROUND_ROBIN" =>
-          for {
-            _              <- IO.unit
-            nodeIds        = NonEmptyList.fromListUnsafe(ctx.config.swarmNodes)
-            lb             = mx.cinvestav.commons.balancer.deterministic.RoundRobin(nodeIds)
-            selectedNodeId = lb.balanceWith(nodeIds = nodeIds,counter = counter)
-          } yield selectedNodeId
-        case "PSEUDO_RANDOM" => for {
-          _            <- IO.unit
-          nodeIds      = NonEmptyList.fromListUnsafe(ctx.config.swarmNodes)
-          lb           = mx.cinvestav.commons.balancer.deterministic.PseudoRandom(nodeIds = nodeIds)
-          selectedNode = lb.balance
-//            = ctx.config.swarmNodes(rnd.nextInt(ctx.config.swarmNodes.length))
-        } yield selectedNode
+      selectedNode <- if(nrs.where.nonEmpty) nrs.where.pure[IO] else {
+        val x = ctx.config.loadBalancer match {
+          case "ROUND_ROBIN" =>
+            for {
+              _              <- IO.unit
+              nodeIds        = NonEmptyList.fromListUnsafe(ctx.config.swarmNodes)
+              lb             = mx.cinvestav.commons.balancer.deterministic.RoundRobin(nodeIds)
+              selectedNodeId = lb.balanceWith(nodeIds = nodeIds,counter = counter)
+            } yield selectedNodeId
+          case "PSEUDO_RANDOM" => for {
+            _            <- IO.unit
+            nodeIds      = NonEmptyList.fromListUnsafe(ctx.config.swarmNodes)
+            lb           = mx.cinvestav.commons.balancer.deterministic.PseudoRandom(nodeIds = nodeIds)
+            selectedNode = lb.balance
+            //            = ctx.config.swarmNodes(rnd.nextInt(ctx.config.swarmNodes.length))
+          } yield selectedNode
+        }
+        x
       }
 //
 
       _            <- ctx.logger.debug(s"SELECTED_NODE $selectedNode")
-
       x            <- ctx.dockerClientX.createService(
         name                     = containerName,
         image                    = image,
@@ -188,12 +186,11 @@ object Helpers {
       ).onError{ e=>
          ctx.logger.error(e.getMessage)
       }
-      _         <- ctx.logger.debug(s"CREATE_SERVICE_RES $x")
-      serviceId  = x.getId
-      _ <- ctx.logger.debug(s"SERVICE_ID $serviceId")
-      _ <- ctx.state.update(s=>s.copy(createdNodes =s.createdNodes:+serviceId))
-      createdNode = CreatedNode(serviceId = serviceId,selectedSwarmNodeId = selectedNode.some)
+      serviceId     = x.getId
+      _             <- ctx.state.update(s=>s.copy(createdNodes =s.createdNodes:+serviceId))
+      createdNode   = CreatedNode(serviceId = serviceId,selectedSwarmNodeId = selectedNode.some)
     } yield createdNode
+//    ____________________________________________________________________
     program.onError{ e=>
       ctx.logger.debug(s"ERROR ${e.getMessage}")
     }
@@ -613,7 +610,7 @@ object Helpers {
 //    dockerImage = x.dockerImage).map(y=>(y,x))
 //
 
-  def addNode(n:INode)(addedService: AddedService,headers:Headers = Headers.empty)(implicit ctx:NodeContext,e:EntityEncoder[IO,AddedService])= {
+  def addNode(n:INode)(addedService: AddedStorageNode,headers:Headers = Headers.empty)(implicit ctx:NodeContext,e:EntityEncoder[IO,AddedStorageNode])= {
     val hostname   = n.hostname
     val port       = n.port
     val apiVersion =  ctx.config.apiVersion

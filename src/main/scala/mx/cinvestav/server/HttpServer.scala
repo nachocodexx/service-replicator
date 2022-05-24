@@ -4,9 +4,11 @@ import cats.data.Kleisli
 import cats.effect.IO.{IOCont, Uncancelable}
 import cats.implicits._
 import cats.effect._
-import mx.cinvestav.Declarations.Payloads.CreateCacheNode
+import cats.effect.std.Semaphore
+import mx.cinvestav.Declarations.Payloads.CreateStorageNode
 import mx.cinvestav.commons.events
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
+import mx.cinvestav.commons.types.NodeReplicationSchema
 import mx.cinvestav.controllers.morin.GetContainer
 import mx.cinvestav.controllers
 import mx.cinvestav.helpers.Helpers
@@ -38,7 +40,7 @@ import scala.concurrent.duration._
 import language.postfixOps
 
 
-class HttpServer()(implicit ctx:NodeContext){
+class HttpServer(s:Semaphore[IO])(implicit ctx:NodeContext){
 
   def apiBaseRouteName = s"/api/v${ctx.config.apiVersion}"
 
@@ -55,12 +57,16 @@ class HttpServer()(implicit ctx:NodeContext){
       case req@GET -> Root  => Ok()
 //
       case req@POST -> Root  => for {
-        payload     <- req.as[CreateCacheNode]
-//
-        hostLogPath = req.headers.get(CIString("Host-Log-Path")).map(_.head.value).getOrElse(ctx.config.hostLogPath)
-        maxAR       = req.headers.get(CIString("Max-AR")).flatMap(_.head.value.toIntOption).getOrElse(ctx.config.maxAr)
-//
-        res         <- controllers.nodes.Create(payload,hostLogPath = hostLogPath,maxAR = maxAR)
+        serviceTimeStart <- IO.monotonic.map(_.toNanos)
+        headers          = req.headers
+        eventId         = headers.get(CIString("Event-Id")).map(_.head.value).getOrElse("")
+        _                <- s.acquire
+        payload          <- req.as[NodeReplicationSchema]
+        res              <- controllers.nodes.Createv3(payload = payload)
+        _                <- s.release
+        serviceTimeEnd   <- IO.monotonic.map(_.toNanos)
+        serviceTime      = serviceTimeEnd - serviceTimeStart
+        _                <- ctx.logger.debug(s"CREATE_NODE $eventId $serviceTime")
       } yield res
 //      case req@POST -> Root / "v2" =>controllers.nodes.Create.v2(req)
     },
@@ -74,7 +80,7 @@ class HttpServer()(implicit ctx:NodeContext){
             events = s.events.filter{
               case _:Events.RemovedService=> true
               case _:Events.StartedService => true
-              case _: AddedService => true
+              case _: AddedStorageNode => true
               case _:Events.CreatedPool => true
             }
           )
@@ -98,8 +104,7 @@ class HttpServer()(implicit ctx:NodeContext){
 
 object HttpServer {
 
-  def apply()(implicit ctx:NodeContext) = new HttpServer()
-
+  def apply(s:Semaphore[IO])(implicit ctx:NodeContext) = new HttpServer(s=s)
 
 //      .withHttpApp("",)
 

@@ -4,8 +4,9 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.std.{Queue, Semaphore}
 import fs2.Stream
-import mx.cinvestav.Declarations.Payloads.CreateCacheNode
+import mx.cinvestav.Declarations.Payloads.CreateStorageNode
 import mx.cinvestav.Declarations.{NodeContext, NodeState}
+import mx.cinvestav.commons.types.NodeReplicationSchema
 import mx.cinvestav.config.DefaultConfig
 import mx.cinvestav.server.HttpServer
 import org.http4s.blaze.client.BlazeClientBuilder
@@ -69,25 +70,12 @@ object Main extends IOApp{
     (client,finalizer)         <- BlazeClientBuilder[IO](global).resource.allocated
     implicit0(ctx:NodeContext) <- initContext(client)
     q                          <- Queue.dropping[IO,Int](1)
-    _                          <- Stream.fromQueueUnterminated(queue=q)
-      .evalMap { _ =>
-        val payload  = CreateCacheNode(cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
-        for {
-          _ <- ctx.logger.debug("CREATE_NEW_NODE")
-          _ <- controllers.nodes.Create(payload=payload,hostLogPath=ctx.config.hostLogPath,maxAR= ctx.config.maxAr)
-          _ <- IO.sleep(ctx.config.createNodeCoolDownMs milliseconds)
-          _ <- ctx.logger.debug("FINISHED_CREATED_NODE")
-        } yield ()
-      }
-      .compile.drain.start
-    _ <- if(ctx.config.daemonEnabled) DaemonReplicator(q=q,period = ctx.config.daemonDelayMs.milliseconds).compile.drain.onError(e=>ctx.logger.error(e.getMessage)).start else IO.unit
-//
-    _ <- (0 until config.initNodes).toList.traverse{ _=>
-      val payload  = CreateCacheNode(
-        cacheSize = config.baseCacheSize, policy = config.baseCachePolicy, networkName = config.dockerNetworkName)
-      controllers.nodes.Create(payload=payload,hostLogPath = config.hostLogPath, maxAR = config.maxAr)
+    s                          <- Semaphore[IO](1)
+    _                          <- (0 until config.initNodes).toList.traverse{ index=>
+      val payload  = NodeReplicationSchema.empty(id = s"sn-$index")
+      controllers.nodes.Createv3(payload =payload)
     }
-    _ <- new HttpServer().run()
+    _ <- new HttpServer(s = s ).run()
     _ <- finalizer
   } yield ExitCode.Success
 }

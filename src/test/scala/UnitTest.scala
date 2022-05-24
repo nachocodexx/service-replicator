@@ -49,25 +49,12 @@ class UnitTest extends munit .CatsEffectSuite {
     } yield ()
   }
 
-  test("Basic") {
-    val payload = CreateCacheNode(
-      cacheSize    = 10,
-      policy       = "LFU",
-      environments =  Map.empty[String,String],
-      networkName  = "my-net",
-      image        = Docker.Image("","".some)
-    )
-    resourceClient.use{ client =>
-      val req  = Request[IO](
-        method =  Method.POST,
-        uri    = Uri.unsafeFromString("http://localhost:3000/api/v6/create/cache-node" )
-      ).withEntity(payload)
-
-      for {
-        resStatus <- client.status(req=req)
-        _ <- IO.println(resStatus)
-      } yield()
-    }
+  test("K"){
+    val x = Map("NODE_ID"->"sn-0")
+    val y = Map("XNODE_ID"-> "sn-xxx","NODE_PORT"-> 6666)
+    val z = x ++ y
+    println(z)
   }
+
 
 }

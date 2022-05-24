@@ -2,7 +2,7 @@ package mx.cinvestav.controllers.nodes
 
 import cats.effect.IO
 import mx.cinvestav.Declarations.NodeContext
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import mx.cinvestav.events.Events
 import mx.cinvestav.events.Events.RemovedService
 import org.http4s.dsl.io._
@@ -17,7 +17,7 @@ object Delete {
       currentState      <- ctx.state.get
       rawEvents         = currentState.events
       events            = Events.orderAndFilterEventsMonotonic(events=rawEvents)
-      maybeService      = Events.onlyAddedService(events=events).map(_.asInstanceOf[AddedService]).find(_.nodeId==nodeId)
+      maybeService      = Events.onlyAddedStorageNode(events=events).map(_.asInstanceOf[AddedStorageNode]).find(_.nodeId==nodeId)
       response          <- maybeService match {
         case Some(addedService) => for {
           _   <- ctx.logger.debug(s"REMOVING $nodeId")

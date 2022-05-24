@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.effect.IO
 import mx.cinvestav.Declarations.NodeContext
 import mx.cinvestav.commons.docker
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import mx.cinvestav.commons.events.{EventX, Get, Put}
 
 import java.util.UUID
@@ -69,8 +69,8 @@ object Events {
                          ) extends EventX
 
 
-  def onlyAddedService(events:List[EventX]): List[EventX] = events.filter{
-    case _:AddedService => true
+  def onlyAddedStorageNode(events:List[EventX]): List[EventX] = events.filter{
+    case _:AddedStorageNode => true
     case _ => false
   }
 
@@ -89,7 +89,7 @@ object Events {
           now      <- IO.monotonic.map(_.toNanos)
           realNow  <- IO.realTime.map(_.toNanos)
           newEvent = event match {
-            case x:AddedService => x.copy(
+            case x:AddedStorageNode => x.copy(
               monotonicTimestamp = now,
               serialNumber = lastSerialNumber+index+1,
               timestamp = realNow
@@ -128,7 +128,7 @@ object Events {
   def filterEventsMonotonic(events:List[EventX]): List[EventX] = events.foldLeft(List.empty[EventX]){
     case ((events,e))=> e match {
       case rn:RemovedService => events.filterNot {
-        case an: AddedService => an.monotonicTimestamp < rn.monotonicTimestamp && an.nodeId == rn.nodeId
+        case an: AddedStorageNode => an.monotonicTimestamp < rn.monotonicTimestamp && an.nodeId == rn.nodeId
         case an: Put=> an.monotonicTimestamp < rn.monotonicTimestamp && an.nodeId == rn.nodeId && an.nodeId == rn.nodeId
         case an: Get => an.monotonicTimestamp < rn.monotonicTimestamp && an.nodeId == rn.nodeId && an.nodeId == rn.nodeId
         case _ => false

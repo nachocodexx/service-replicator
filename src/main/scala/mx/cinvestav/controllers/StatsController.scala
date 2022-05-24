@@ -8,8 +8,7 @@ import io.circe.syntax._
 import io.circe.generic.auto._
 import mx.cinvestav.Declarations.Implicits._
 import mx.cinvestav.Declarations.NodeContext
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
-import mx.cinvestav.commons.types.Monitoring.PoolInfo
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import mx.cinvestav.events.Events
 //
 import io.circe.syntax._
@@ -23,26 +22,24 @@ object StatsController {
       currentState     <- ctx.state.get
       rawEvents        = currentState.events
       events           = Events.orderAndFilterEventsMonotonic(events=rawEvents)
-      nodes            = Events.onlyAddedService(events=events).sortBy(_.nodeId)
-      poolInfo         <- ctx.config.monitoring.getInfo().compile.lastOrError.handleErrorWith{e =>
-        ctx.logger.error(e.getMessage) *> PoolInfo.empty.pure[IO]
-      }
-      infos            = poolInfo.infos.sortBy(_.nodeId)
+      nodes            = Events.onlyAddedStorageNode(events=events).sortBy(_.nodeId)
+//      poolInfo         <- ctx.config.monitoring.getInfo().compile.lastOrError.handleErrorWith{e =>
+//        ctx.logger.error(e.getMessage) *> PoolInfo.empty.pure[IO]
+//      }
+//      infos            = poolInfo.infos.sortBy(_.nodeId)
 
-      nodesJson = (nodes zip infos).map{
-        case (n,info) =>
-          val node = n.asInstanceOf[AddedService]
-        Json.obj(
-          "nodeId" -> node.nodeId.asJson,
-          "port"      -> node.port.asJson,
-          "policy"    -> node.cachePolicy.asJson,
-          "cacheSize" -> node.cacheSize.asJson,
-          "info"      -> info.asJson
-        )
-      }
+//      nodesJson = (nodes zip infos).map{
+//        case (n,info) =>
+//          val node = n.asInstanceOf[AddedStorageNode]
+//        Json.obj(
+//          "nodeId" -> node.nodeId.asJson,
+//          "port"      -> node.port.asJson,
+////          "info"      -> info.asJson
+//        )
+//      }
       stats = Json.obj(
-        "nodes" ->  nodesJson.asJson,
-        "uf"        -> poolInfo.uf().asJson
+        "nodeId" -> ctx.config.nodeId.asJson,
+        "nodes" -> nodes.asJson
       )
       response         <- Ok(stats)
     } yield response

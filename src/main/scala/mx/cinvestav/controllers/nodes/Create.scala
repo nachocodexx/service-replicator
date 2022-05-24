@@ -1,14 +1,15 @@
 package mx.cinvestav.controllers.nodes
 import cats.implicits._
 import cats.effect._
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
+import mx.cinvestav.commons.types.NodeReplicationSchema
 //
 import mx.cinvestav.Declarations.CreateCacheNodeCfg
 import mx.cinvestav.config.DockerMode
 import mx.cinvestav.helpers.Helpers
 ///
 import mx.cinvestav.Declarations.NodeContext
-import mx.cinvestav.Declarations.Payloads.{CreateCacheNode, CreateCacheNodeResponseV2}
+import mx.cinvestav.Declarations.Payloads.{CreateStorageNode, CreateCacheNodeResponseV2}
 import mx.cinvestav.commons.types.{NodeId,SystemReplicationResponse}
 import mx.cinvestav.commons.Implicits._
 import mx.cinvestav.events.Events
@@ -26,7 +27,7 @@ import language.postfixOps
 
 object Create {
 
-  def apply(payload:CreateCacheNode,hostLogPath:String,maxAR:Int)(implicit ctx:NodeContext) = {
+  def apply(nrs:NodeReplicationSchema, hostLogPath:String, maxAR:Int)(implicit ctx:NodeContext) = {
     for {
       _                 <- ctx.logger.debug("CREATE_NODE")
       arrivalTime       <- IO.realTime.map(_.toMillis)
@@ -34,9 +35,10 @@ object Create {
       currentState      <- ctx.state.get
       rawEvents         = currentState.events
       events            = Events.orderAndFilterEventsMonotonic(events=rawEvents)
-      nodes             = Events.onlyAddedService(events=events)
+      nodes             = Events.onlyAddedStorageNode(events=events)
+//      index             = nodes.length
       defaultCounter    = ctx.config.swarmNodes.map(_ -> 0).toMap
-      counter           = nodes.asInstanceOf[List[AddedService]].groupBy(_.swarmNodeId).map{
+      counter           = nodes.asInstanceOf[List[AddedStorageNode]].groupBy(_.swarmNodeId).map{
         case (snid,xs) => snid -> xs.length
       } |+| defaultCounter
       currentNodeIndex  = nodes.length
@@ -53,8 +55,8 @@ object Create {
 //        ________________________________________________________________
           dockerLogPath        = "/app/logs"
           dockerStoragePath    = "/app/data"
-          totalMemoryCapacity  = payload.environments.getOrElse("TOTAL_MEMORY_CAPACITY",ctx.config.memoryBytes.toString)
-          totalStorageCapacity = payload.environments.getOrElse("TOTAL_STORAGE_CAPACITY",ctx.config.baseTotalStorageCapacity.toString)
+          totalMemoryCapacity  = nrs.what.metadata.getOrElse("TOTAL_MEMORY_CAPACITY",ctx.config.memoryBytes.toString)
+          totalStorageCapacity = nrs.what.metadata.getOrElse("TOTAL_STORAGE_CAPACITY",ctx.config.baseTotalStorageCapacity.toString)
           defaultEnvs       =  Map(
             "NODE_ID" -> nodeId.value,
             "POOL_ID" -> ctx.config.pool.hostname,
@@ -72,8 +74,8 @@ object Create {
             "SERVICE_REPLICATOR_HOSTNAME" -> ctx.config.nodeId,
             "SERVICE_REPLICATOR_PORT" -> ctx.config.port.toString,
             //
-            "CACHE_POLICY"-> payload.policy,
-            "CACHE_SIZE" -> payload.cacheSize.toString,
+//            "CACHE_POLICY"-> payload.policy,
+//            "CACHE_SIZE" -> payload.cacheSize.toString,
             "TOTAL_STORAGE_CAPACITY" -> ctx.config.baseTotalStorageCapacity.toString,
             "TOTAL_MEMORY_CAPACITY" -> totalMemoryCapacity,
             "IN_MEMORY" -> ctx.config.pool.inMemory.toString,
@@ -83,23 +85,20 @@ object Create {
             "API_VERSION" ->ctx.config.apiVersion.toString,
             "BUFFER_SIZE" -> ctx.config.bufferSize.toString,
             "LOG_PATH" ->  dockerLogPath,
-            "DELAY_REPLICA_MS" -> ctx.config.delayReplicaMs.toString
+            "DELAY_REPLICA_MS" -> ctx.config.delayReplicaMs.toString,
+            "NODE_INDEX" -> currentNodeIndex.toString
           )
           cfg               = CreateCacheNodeCfg(
                           nodeId       = nodeId.value,
                           poolId       = ctx.config.poolId,
-                          cachePolicy  = payload.policy,
-                          cacheSize    = payload.cacheSize,
-                          networkName  = payload.networkName,
-                          environments = payload.environments ++ defaultEnvs,
+                          environments = nrs.what.metadata ++ defaultEnvs,
                           hostLogPath  = ctx.config.hostLogPath,
-                          dockerImage  = payload.image,
                           memoryBytes  = totalMemoryCapacity.toLong,
                           diskBytes    = totalStorageCapacity.toLong,
                           nanoCPUS     = ctx.config.nanoCPUS,
           )
 // _________________________________________________________________________
-          createdNode       <- if(dockerMode  == DockerMode.SWARM) Helpers.createCacheNodeSwarm(cfg,counter) else Helpers.createCacheNodeLocal(cfg)
+          createdNode       <- if(dockerMode  == DockerMode.SWARM) Helpers.createCacheNodeSwarm(nrs =nrs , cfg,counter) else Helpers.createCacheNodeLocal(cfg)
           maybeIpAddress  = nodeId.value.some
           _               <- ctx.logger.debug("IP_ADDRESSES/HOSTNAME "+maybeIpAddress )
           serviceTime     <- IO.realTime.map(_.toMillis).map(_ - arrivalTime)
@@ -122,7 +121,7 @@ object Create {
                   )
                   now              <- IO.realTime.map(_.toMillis)
                   serviceTimeNanos <- IO.monotonic.map(_.toNanos).map(_ - arrivalTimeNanos)
-                  addedNodeEvent   = AddedService(
+                  addedNodeEvent   = AddedStorageNode (
                     serialNumber         = 0,
                     nodeId               = nodeId.value,
                     serviceId            = createdNode.serviceId,
@@ -130,8 +129,6 @@ object Create {
                     port                 = publicPort,
                     totalStorageCapacity = totalStorageCapacity.toLong,
                     totalMemoryCapacity  = totalMemoryCapacity.toLong,
-                    cacheSize            = payload.cacheSize,
-                    cachePolicy          = payload.policy,
                     timestamp            = now,
                     serviceTimeNanos     = serviceTimeNanos,
                     correlationId        = createdNode.serviceId,

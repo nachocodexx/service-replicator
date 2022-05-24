@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.effect._
 import mx.cinvestav.Declarations.Implicits._
 import mx.cinvestav.Declarations.NodeContext
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import mx.cinvestav.config.DockerMode
 import mx.cinvestav.events.Events
 import mx.cinvestav.events.Events.StartedService
@@ -26,7 +26,7 @@ object Started {
     currentState      <- ctx.state.get
     events            = Events.filterEventsMonotonic(events= currentState.events)
     dockerClientX     = ctx.dockerClientX
-    maybeAddedService = Events.onlyAddedService(events = events).map(_.asInstanceOf[AddedService]).find(_.nodeId == nodeId)
+    maybeAddedService = Events.onlyAddedStorageNode(events = events).map(_.asInstanceOf[AddedStorageNode]).find(_.nodeId == nodeId)
     response          <- maybeAddedService match {
       case Some(addedService) => for {
         maybePublicPort   <- if(ctx.config.dockerMode === DockerMode.LOCAL.toString)
@@ -44,7 +44,7 @@ object Started {
             _  <- ctx.config.pool.updateNodeNetworkCfg(nodeId,publicPort,ipAddress)
               .flatTap(x=>ctx.logger.debug(s"PUBLIC_PORT_STATUS $x")).start
             events            = Events.orderAndFilterEventsMonotonic(events=currentState.events)
-            maybeAddedService = Events.onlyAddedService(events=events).map(_.asInstanceOf[AddedService]).find(_.nodeId==nodeId)
+            maybeAddedService = Events.onlyAddedStorageNode(events=events).map(_.asInstanceOf[AddedStorageNode]).find(_.nodeId==nodeId)
             res               <- maybeAddedService match {
               case Some(addedService) => for {
                 _              <- IO.unit

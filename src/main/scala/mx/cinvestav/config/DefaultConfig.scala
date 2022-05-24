@@ -1,8 +1,7 @@
 package mx.cinvestav.config
 
 import fs2.Stream
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
-import mx.cinvestav.commons.types.Monitoring.PoolInfo
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 import org.http4s.{Header, Headers}
 import org.typelevel.ci.CIString
 //
@@ -34,22 +33,10 @@ sealed trait INode {
 
 case class DataReplicator(hostname:String,port:Int) extends INode
 
-case class Monitoring(hostname:String,port:Int) extends INode {
-  def  getInfo()(implicit ctx:NodeContext): Stream[IO, PoolInfo] = {
-    val apiVersion = s"v${ctx.config.apiVersion}"
-    val uri     = Uri.unsafeFromString(s"http://$hostname:$port/api/$apiVersion/pool/info")
-    val request = Request[IO](
-      method = Method.GET,
-      uri = uri
-    )
-    ctx.client.stream(req = request).evalMap{
-      x=>
-        x.as[PoolInfo].handleErrorWith(e=>ctx.logger.error(e.getMessage) *> PoolInfo.empty.pure[IO])
-    }
-  }
-}
+case class Monitoring(hostname:String,port:Int) extends INode {}
+
 case class Pool(hostname:String,port:Int,inMemory:Boolean) extends INode{
-  def addNode(addedService: AddedService)(implicit ctx:NodeContext)= {
+  def addNode(addedService: AddedStorageNode)(implicit ctx:NodeContext)= {
       val uri     = Uri.unsafeFromString(s"http://$hostname:$port/api/v${ctx.config.apiVersion}/nodes/add")
       val request = Request[IO](
         method = Method.POST,

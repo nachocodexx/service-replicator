@@ -6,7 +6,7 @@ import cats.effect._
 import cats.effect.std.Semaphore
 import fs2.concurrent.SignallingRef
 import mx.cinvestav.commons.docker
-import mx.cinvestav.commons.events.ServiceReplicator.AddedService
+import mx.cinvestav.commons.events.ServiceReplicator.AddedStorageNode
 
 import java.util.UUID
 //
@@ -22,7 +22,7 @@ import org.typelevel.log4cats.Logger
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
-import mx.cinvestav.Declarations.Payloads.CreateCacheNode
+import mx.cinvestav.Declarations.Payloads.CreateStorageNode
 
 object Declarations {
 
@@ -39,12 +39,12 @@ object Declarations {
         DockerImage(name,tag)
       }
     }
-    case class CreateCacheNode(
-                                cacheSize:Int,
-                                policy:String,
-                                networkName:String,
+    case class CreateStorageNode(
+//                                cacheSize:Int,
+//                                policy:String,
+//                                networkName:String,
                                 environments:Map[String,String]= Map.empty[String,String],
-                                image:Image = Image("nachocode/cache-node","v2".some)
+//                                image:Image = Image("nachocode/cache-node","v2".some)
                               )
     case class CreateCacheNodeResponse(
                                         nodeId:String,
@@ -89,7 +89,7 @@ object Declarations {
           case "ADDED_NODE" => hCursor.as[AddedNode]
           case "REMOVED_NODE" => hCursor.as[RemovedNode]
           case "REPLICATED" => hCursor.as[Replicated]
-          case "ADDED_SERVICE" => hCursor.as[AddedService]
+          case "ADDED_STORAGE_NODE" => hCursor.as[AddedStorageNode]
         }
       } yield decoded
     }
@@ -105,9 +105,7 @@ object Declarations {
       case x:Evicted => x.asJson
       case r: Replicated => r.asJson
       case m: Missed => m.asJson
-      case m: AddedService => m.asJson
-//      case sd:Transfered => sd.asJson
-//      case sd:GetInProgress => sd.asJson
+      case m: AddedStorageNode => m.asJson
     }
   }
 
@@ -167,13 +165,10 @@ object Declarations {
   case class CreateCacheNodeCfg(
                                  nodeId:String,
                                  poolId:String,
-                                 cachePolicy:String,
-                                 cacheSize:Int,
                                  environments:Map[String,String] = Map.empty[String,String],
                                  diskBytes:Long =1000000000L,
                                  memoryBytes:Long = 1073741824*4,
                                  nanoCPUS:Long    = 1000000000*2,
-
                                  networkName:String="my-net",
                                  hostLogPath:String = "/test/logs",
                                  hostStoragePath:String = "/test/sink",
@@ -181,12 +176,12 @@ object Declarations {
                                  volumes:Map[String,String] = Map.empty[String,String],
                                )
     object CreateCacheNodeCfg {
-      def fromCreateCacheNode(nodeId: NodeId,payload:CreateCacheNode)(implicit ctx:NodeContext) = CreateCacheNodeCfg(
+      def fromCreateCacheNode(nodeId: NodeId,payload:CreateStorageNode)(implicit ctx:NodeContext) = CreateCacheNodeCfg(
         nodeId = nodeId.value,
         poolId = ctx.config.poolId,
-        cachePolicy = payload.policy,
-        cacheSize= payload.cacheSize,
-        networkName = payload.networkName,
+//        cachePolicy = payload.policy,
+//        cacheSize= payload.cacheSize,
+//        networkName = payload.networkName,
         environments = payload.environments,
       )
     }
