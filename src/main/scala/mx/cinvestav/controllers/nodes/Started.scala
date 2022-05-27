@@ -9,6 +9,7 @@ import mx.cinvestav.config.DockerMode
 import mx.cinvestav.events.Events
 import mx.cinvestav.events.Events.StartedService
 import mx.cinvestav.helpers.Helpers
+import org.typelevel.ci.CIString
 //
 import io.circe._
 import io.circe.syntax._
@@ -23,6 +24,8 @@ object Started {
     _                 <- ctx.logger.debug(s"STARTED $nodeId")
     arrivalTime       <- IO.realTime.map(_.toNanos)
     arrivalTimeNanos  <- IO.monotonic.map(_.toNanos)
+    headers           = req.headers
+    index             = headers.get(CIString("Node-Index")).flatMap(_.head.value.toIntOption).getOrElse(0)
     currentState      <- ctx.state.get
     events            = Events.filterEventsMonotonic(events= currentState.events)
     dockerClientX     = ctx.dockerClientX
@@ -41,8 +44,8 @@ object Started {
         res               <- maybePublicPort match {
           case Some(publicPort) => for {
             _                 <- IO.unit
-            _  <- ctx.config.pool.updateNodeNetworkCfg(nodeId,publicPort,ipAddress)
-              .flatTap(x=>ctx.logger.debug(s"PUBLIC_PORT_STATUS $x")).start
+//            _  <-
+//              .flatTap(x=>ctx.logger.debug(s"PUBLIC_PORT_STATUS $x")).start
             events            = Events.orderAndFilterEventsMonotonic(events=currentState.events)
             maybeAddedService = Events.onlyAddedStorageNode(events=events).map(_.asInstanceOf[AddedStorageNode]).find(_.nodeId==nodeId)
             res               <- maybeAddedService match {
@@ -57,9 +60,11 @@ object Started {
                 )
                 _              <- Events.saveEvents(events = startedService :: Nil)
                 systems        = List(ctx.config.pool)
-                //            _              <- ctx.logger.debug(s"HERE_1")
+                nodeHeaders    = Headers(
+                  Header.Raw(CIString("Node-Index"),index.toString)
+                )
                 xs             <- systems.traverse{ n=>
-                  Helpers.addNode(n)(addedService)
+                  Helpers.addNode(n)(addedService , headers = nodeHeaders )
                     .handleErrorWith{ e=>
                       ctx.logger.error(e.getMessage) *> NoContent().map(_.status)
                     }
@@ -68,6 +73,8 @@ object Started {
                   .onError(e=>
                     ctx.logger.error(e.getMessage)
                   )
+
+                _ <- ctx.config.pool.updateNodeNetworkCfg(nodeId,publicPort,ipAddress)
                 _       <- ctx.logger.debug(s"STATUS $xs")
                 res     <- NoContent()
               } yield res
